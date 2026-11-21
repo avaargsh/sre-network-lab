@@ -2,8 +2,10 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import sys
 
 TARGET = Path(__file__).resolve().parents[1] / "scripts" / "lab_pmtu_tcp.py"
+sys.path.insert(0, str(TARGET.parent))
 spec = importlib.util.spec_from_file_location("lab_pmtu_tcp", TARGET)
 lab = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(lab)

@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 18
     env:
-      RUN_ID: tcp-pmtu-\${{ github.run_id }}-\${{ github.run_attempt }}
+      RUN_ID: tcp-pmtu-${{ github.run_id }}-${{ github.run_attempt }}
       EVIDENCE_DIR: /tmp/sre-pmtu-tcp
     steps:
       - name: Checkout
