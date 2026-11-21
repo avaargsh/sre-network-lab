@@ -9,7 +9,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check shell syntax
-        run: bash -n scripts/*.sh
+        run: |
+          bash -n scripts/*.sh
+          bash -n environments/vm/run_live_e2e.sh
       - name: Check Vagrantfile Ruby syntax
         run: |
           ruby -c environments/vm/Vagrantfile

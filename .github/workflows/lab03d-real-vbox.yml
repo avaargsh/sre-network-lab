@@ -1,0 +1,32 @@
+name: LAB-03D real 3-VM PCAP (manual dedicated runner)
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type I_CONFIRM_DEDICATED_VBOX_HOST; dedicated Linux host ONLY'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  vm-pcap-e2e:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'I_CONFIRM_DEDICATED_VBOX_HOST'
+    runs-on: [self-hosted, linux, x64, sre-vbox-lab]
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify independent VirtualBox guest network and four TCP PCAPs
+        env:
+          SRE_LAB_LIVE_E2E_ACK: I_CONFIRM_DEDICATED_VBOX_HOST
+          SRE_LAB_VM_SCOPE: sre-lab03d-vbox-intnet
+        run: bash environments/vm/run_live_e2e.sh
+      - name: Archive synthetic scoped VM evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-three-vm-baseline-evidence
+          path: evidence/vm-live-*/
+          retention-days: 14
+          if-no-files-found: warn
