@@ -47,6 +47,7 @@ def inspect(role):
         "machine_id": Path("/etc/machine-id").read_text().strip(),
         "boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
         "links": links, "default_iface": default,
+        "virtualization": command("systemd-detect-virt", "--vm").strip(),
     }
     if role == "router":
         result["ip_forward"] = Path("/proc/sys/net/ipv4/ip_forward").read_text().strip()

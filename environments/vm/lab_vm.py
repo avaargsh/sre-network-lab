@@ -44,7 +44,7 @@ def require_independent_vms(reports):
     machines, boots = set(), set()
     for role in ROLES:
         r = reports[role]
-        if r.get("lab") != LAB or r.get("role") != role:
+        if r.get("lab") != LAB or r.get("role") != role or r.get("virtualization") != "oracle":
             raise ValueError(f"{role}: wrong marker or VM role")
         machine, boot = r.get("machine_id", ""), r.get("boot_id")
         if not re.fullmatch(r"[0-9a-f]{32}", machine):

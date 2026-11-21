@@ -12,7 +12,7 @@ spec.loader.exec_module(vm)
 
 
 def report(role, machine, boot, iface, addr, default="enp0s3", route=None):
-    return {"lab":"sre-lab03d-vbox-intnet", "role":role, "machine_id":machine,
+    return {"lab":"sre-lab03d-vbox-intnet", "role":role, "virtualization":"oracle", "machine_id":machine,
             "boot_id":boot, "default_iface":default,
             "links": {iface: addr},
             "route": route or {}}
@@ -47,6 +47,11 @@ class VMContracts(unittest.TestCase):
         with self.assertRaises(ValueError):
             vm.require_independent_vms(self.reports)
         self.reports = {"src":SRC,"router":ROUTER,"dst":dict(DST,boot_id=SRC["boot_id"])}
+        with self.assertRaises(ValueError):
+            vm.require_independent_vms(self.reports)
+
+    def test_rejects_non_virtualbox_guest(self):
+        self.reports["router"]["virtualization"]="kvm"
         with self.assertRaises(ValueError):
             vm.require_independent_vms(self.reports)
 
