@@ -1,55 +1,99 @@
 #!/usr/bin/env bash
-# collect-evidence.sh <scenario> <phase>
-# phase: baseline | fault | recovery
+# collect-evidence.sh <scenario> <baseline|fault|recovery>
+# All results are locally stored and MUST be reviewed before public sharing.
 set -euo pipefail
+umask 077
 
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 SCENARIO=${1:-}
 PHASE=${2:-}
-RUN_ID=${RUN_ID:-$(date +%Y%m%d-%H%M%S)}
-BASE="../../evidence/${RUN_ID}"
+case "$SCENARIO" in dns|service|mtu|network-policy|envoy-503|istio-mtls) ;; *) echo "Unsupported scenario: $SCENARIO" >&2; exit 2 ;; esac
+case "$PHASE" in baseline|fault|recovery) ;; *) echo "Usage: $0 <scenario> <baseline|fault|recovery>" >&2; exit 2 ;; esac
+command -v kubectl >/dev/null || { echo 'kubectl required' >&2; exit 1; }
+command -v jq >/dev/null || { echo 'jq required' >&2; exit 1; }
 
-if [[ -z "$SCENARIO" || -z "$PHASE" ]]; then
-  echo "Usage: $0 <scenario> <baseline|fault|recovery>"
-  exit 1
+if [[ -z ${RUN_ID:-} ]]; then
+  if [[ "$PHASE" != baseline ]]; then
+    echo 'RUN_ID is required for fault and recovery phases (reuse the baseline RUN_ID)' >&2
+    exit 2
+  fi
+  RUN_ID="${SCENARIO}-$(date -u +%Y%m%dT%H%M%SZ)"
 fi
+[[ "$RUN_ID" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$ ]] || { echo 'Invalid RUN_ID' >&2; exit 2; }
+BASE="${EVIDENCE_DIR:-$ROOT/evidence}/$RUN_ID"
+OUT="$BASE/$PHASE"
+if [[ "$PHASE" != baseline ]]; then
+  [[ -f "$BASE/environment.json" ]] || { echo 'Missing baseline environment.json for RUN_ID; refusing unlinked evidence' >&2; exit 2; }
+  [[ "$(jq -r .scenario "$BASE/environment.json")" == "$SCENARIO" ]] || { echo 'RUN_ID belongs to a different scenario' >&2; exit 2; }
+fi
+mkdir -p "$OUT"
+STATUS="$OUT/command-status.tsv"
+LAST_RC=0
+PROBE_RC=3
+printf 'name\texit_code\n' > "$STATUS"
 
-mkdir -p "${BASE}/${PHASE}"
-echo "Collecting evidence for ${SCENARIO} / ${PHASE} -> ${BASE}/${PHASE}"
+capture() {
+  local name=$1 rc=0; shift
+  if "$@" > "$OUT/$name.out" 2> "$OUT/$name.err"; then rc=0; else rc=$?; fi
+  printf '%s\t%d\n' "$name" "$rc" >> "$STATUS"
+  LAST_RC=$rc
+  if ((rc != 0)); then echo "WARN $name exited $rc" >&2; fi
+}
 
-# 通用采集
-kubectl get nodes -o wide > "${BASE}/${PHASE}/nodes.txt"
-kubectl get pods -A -o wide > "${BASE}/${PHASE}/pods.txt"
-kubectl get svc -A > "${BASE}/${PHASE}/services.txt"
-kubectl get endpointslices -A > "${BASE}/${PHASE}/endpointslices.txt" || true
+# Safety: fail before collecting anything when kubectl cannot reach the cluster.
+kubectl cluster-info >/dev/null
+capture nodes kubectl get nodes -o wide
+capture pods kubectl get pods -A -o wide
+capture services kubectl get svc -A -o wide
+capture endpointslices kubectl get endpointslices -A -o wide
+capture networkpolicies kubectl get networkpolicy -A
+capture kube-proxy kubectl -n kube-system get cm kube-proxy -o yaml
+capture cni-pods kubectl -n kube-system get pods -o wide
 
-# 场景特定（可扩展）
 case "$SCENARIO" in
   dns)
-    kubectl -n kube-system logs -l k8s-app=kube-dns --tail=100 > "${BASE}/${PHASE}/coredns.log" || true
+    capture coredns-logs kubectl -n kube-system logs -l k8s-app=kube-dns --tail=100
+    capture dns-deployment kubectl -n sre-lab-dns get deployment lab-dns-probe -o yaml
+    if [[ "$PHASE" == baseline ]]; then action=baseline
+    elif [[ "$PHASE" == fault ]]; then action=fault
+    else action=verify; fi
+    capture lab-probe "$ROOT/scripts/lab-dns.sh" "$action"
+    PROBE_RC=$LAST_RC
     ;;
   service)
-    kubectl get endpointslices -A -o yaml > "${BASE}/${PHASE}/endpointslices.yaml" || true
+    capture service-endpoints kubectl -n sre-lab-service get endpointslices -l kubernetes.io/service-name=lab-echo -o yaml
+    capture service-config kubectl -n sre-lab-service get svc lab-echo -o yaml
+    if [[ "$PHASE" == baseline ]]; then action=baseline
+    elif [[ "$PHASE" == fault ]]; then action=fault
+    else action=verify; fi
+    capture lab-probe "$ROOT/scripts/lab-service.sh" "$action"
+    PROBE_RC=$LAST_RC
     ;;
-  network-policy)
-    kubectl get networkpolicy -A -o yaml > "${BASE}/${PHASE}/networkpolicies.yaml" || true
-    ;;
+  network-policy) capture policies kubectl get networkpolicy -A -o yaml ;;
   envoy-503|istio-mtls)
-    istioctl proxy-status > "${BASE}/${PHASE}/proxy-status.txt" 2>/dev/null || echo "istioctl not available" > "${BASE}/${PHASE}/proxy-status.txt"
+    if command -v istioctl >/dev/null; then capture proxy-status istioctl proxy-status; else echo -e 'proxy-status\t127' >> "$STATUS"; fi
     ;;
 esac
 
-# 环境快照（仅 baseline 时写一次）
-if [[ "$PHASE" == "baseline" ]]; then
-  cat > "${BASE}/environment.json" <<EOF
-{
-  "run_id": "${RUN_ID}",
-  "scenario": "${SCENARIO}",
-  "timestamp": "$(date -Iseconds)",
-  "kubernetes": "$(kubectl version -o json 2>/dev/null | jq -r '.serverVersion.gitVersion' || echo unknown)",
-  "nodes": $(kubectl get nodes -o json | jq '[.items[].metadata.name]')
-}
-EOF
+if [[ "$PHASE" == baseline ]]; then
+  kubectl version -o json > "$OUT/kubernetes-version.json"
+  kubectl get nodes -o json > "$OUT/nodes.json"
+  jq -n \
+    --arg id "$RUN_ID" --arg scenario "$SCENARIO" \
+    --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg kernel "$(uname -r)" \
+    --slurpfile version "$OUT/kubernetes-version.json" \
+    --slurpfile nodes "$OUT/nodes.json" \
+    '{run_id:$id, scenario:$scenario, timestamp:$timestamp, collector_kernel:$kernel,
+      kubernetes:($version[0].serverVersion.gitVersion // "unknown"),
+      nodes:[$nodes[0].items[]? | {name:.metadata.name, kernel:(.status.nodeInfo.kernelVersion // "unknown"),
+      kubelet:(.status.nodeInfo.kubeletVersion // "unknown")}],
+      cni:"REQUIRES_MANUAL_CONFIRMATION", kube_proxy_mode:"REQUIRES_MANUAL_CONFIRMATION"}' > "$BASE/environment.json"
 fi
-
-echo "Evidence collected to ${BASE}/${PHASE}"
-echo "Run ID: ${RUN_ID}"
+jq -n --arg scenario "$SCENARIO" --arg phase "$PHASE" --arg run_id "$RUN_ID" --argjson probe_rc "$PROBE_RC"   '{run_id:$run_id,scenario:$scenario,phase:$phase,probe_exit_code:$probe_rc,
+    probe_status:(if $probe_rc==0 then "PASS" elif $probe_rc==3 then "NOT_VERIFIED" else "FAILED" end)}' > "$OUT/phase-status.json"
+( cd "$OUT" && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum ) > "$OUT/SHA256SUMS"
+printf 'Evidence: %s\nRUN_ID: %s\nReview command-status.tsv and phase-status.json before publishing\n' "$OUT" "$RUN_ID"
+if [[ "$SCENARIO" == dns || "$SCENARIO" == service ]]; then
+  (( PROBE_RC == 0 )) || { echo "CRITICAL: $SCENARIO $PHASE probe failed; see lab-probe.err/out" >&2; exit 1; }
+fi

@@ -35,6 +35,16 @@
 
 ## 3. 可复现最小实验（只在隔离 Linux VM / 测试机执行）
 
+已实现脚本入口，在仓库根目录运行：
+
+~~~bash
+sudo scripts/lab-netns.sh up
+sudo scripts/lab-netns.sh verify
+sudo scripts/lab-netns.sh down
+~~~
+
+脚本仅创建两端分别位于不同 namespace 的**直连 veth 对**，不经过 Linux bridge、Service DNAT 或跨节点 CNI。它适合验证独立网络栈、直连路由与 ARP；不代表 Kubernetes 实际 Pod 路径。需要 CAP_NET_ADMIN 与 iproute2/ping，已存在同名 Namespace 时脚本会拒绝覆盖。
+
 以下操作使用 root 权限修改**实验主机**网络命名空间，勿在生产节点执行。要求安装 `iproute2`、`ping`。名称须不与现有资源冲突。
 
 ~~~bash

@@ -1,0 +1,6 @@
+# Actual evidence can include cluster addresses, logs, and sensitive metadata.
+evidence/*
+!evidence/report-template.md
+__pycache__/
+*.py[cod]
+.venv/
