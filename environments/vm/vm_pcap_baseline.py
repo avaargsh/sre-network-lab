@@ -169,6 +169,11 @@ def capture_baseline(run_id: str) -> int:
         print(json.dumps(result, indent=2))
         return 0
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        # A stored PASS that the independent auditor rejected is dangerous.
+        # Rewrite it to NOT_VERIFIED, include failure and renew SHA-256 manifest.
+        records["status"] = dict(STATUS)
+        records["failure"] = {"reason": "independent audit rejected: " + str(exc)[-800:]}
+        store(folder, records, pcaps)
         print("NOT_VERIFIED: independent evidence audit failed: " + str(exc), file=sys.stderr)
         return 1
 
