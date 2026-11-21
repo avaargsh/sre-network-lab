@@ -31,7 +31,8 @@ Vagrant.configure("2") do |config|
       vm.vm.provision "shell", inline: <<~SHELL
           set -eu
           apt-get update -qq
-          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iproute2 python3
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iproute2 python3 tcpdump
+          install -D -m 0755 /vagrant/environments/vm/pcap_vm.py /usr/local/libexec/sre-lab03d-pcap.py
           install -d -m 755 /etc/sre-network-lab
           printf '%s\\n' '{"lab":"sre-lab03d-vbox-intnet","role":"#{role}","network":"virtualbox-internal"}' > /etc/sre-network-lab/role.json
           chmod 644 /etc/sre-network-lab/role.json
