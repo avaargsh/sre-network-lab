@@ -126,7 +126,7 @@ def capture(phase: str, path: Path, operations: tuple[str, ...]) -> None:
         for side, iface in (("ingress", "h0"), ("egress", "h1")):
             fd = (path / f"{side}.pcap").open("wb")
             proc = subprocess.Popen(
-                ["ip", "netns", "exec", HOP, "tcpdump", "-i", iface,
+                ["ip", "netns", "exec", HOP, "tcpdump", "--immediate-mode", "-i", iface,
                  "-s", "0", "-n", "-U", "-w", "-", "tcp", "and", "port", str(PORT),
                  "and", "host", SRC_IP, "and", "host", DST_IP],
                 stdout=fd, stderr=subprocess.PIPE, start_new_session=True
@@ -137,6 +137,8 @@ def capture(phase: str, path: Path, operations: tuple[str, ...]) -> None:
             raise RuntimeError("tcpdump exited before business probes")
         results = {kind: ns_client(kind) for kind in operations}
         (path / "http.json").write_text(json.dumps(results, indent=2) + "\n")
+        # AF_PACKET capture may lag an extremely fast HTTP exchange.
+        time.sleep(1.2)
     finally:
         for side, proc, fd in captures:
             if proc.poll() is None:
