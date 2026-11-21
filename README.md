@@ -22,7 +22,7 @@ Kubernetes 网络故障诊断与**证据化排查实验室**，面向 SRE / 平�
 environments/kind/   # 双 Worker Kind 配置（cluster.yaml）
 environments/vm/     # Underlay、BGP、MTU 的独立 VM 实验说明
 scenarios/           # dns / service / mtu / network-policy / envoy-503 / istio-mtls
-scripts/             # preflight / collect-evidence / verify-recovery
+scripts/             # lab-netns / lab-service / preflight / collect-evidence / verify-recovery
 evidence/            # 报告模板与本地运行证据
 docs/learning-path/  # Day 1–7 自学手册
 ~~~
@@ -38,24 +38,56 @@ kubectl get nodes -o wide        # 确认所有节点 Ready
 bash scripts/preflight.sh  # 可选：会创建 node debug 临时 Pod 并尝试交互
 ~~~
 
-然后选择 [DNS](scenarios/dns/) 或 [Service](scenarios/service/) 场景阅读对应 README。**目前六个场景主要是实验说明和命令模板，不代表已经具备全部自动注入 YAML 或自动验收。** 默认 Kind CNI 不保证 NetworkPolicy 生效，Calico、Cilium、Istio 需单独搭建适配环境。
+## 已实现的实验入口（仅个人隔离环境）
 
-### 证据采集（现有脚本行为与限制）
-
-脚本 `collect-evidence.sh` 的证据目录相对于**当前工作目录**（`../../evidence`），所以应从场景目录调用。每次实验固定同一个 RUN_ID：
+**Day 1：Network Namespace + veth**（在专用 Linux VM 或授权测试宿主机执行，需要 CAP_NET_ADMIN）：
 
 ~~~bash
-cd scenarios/dns
-export RUN_ID="dns-$(date +%Y%m%d-%H%M%S)"
-bash ../../scripts/collect-evidence.sh dns baseline
-# 只在隔离实验环境内注入故障，随后采集 fault
-bash ../../scripts/collect-evidence.sh dns fault
-# 恢复服务并手动验证请求后，采集 recovery
-bash ../../scripts/collect-evidence.sh dns recovery
-bash ../../scripts/verify-recovery.sh dns
+sudo scripts/lab-netns.sh up
+sudo scripts/lab-netns.sh verify
+sudo scripts/lab-netns.sh down
 ~~~
 
-本仓库的验证脚本对部分场景仍为占位行为。成功退出不等于真实恢复验证通过。抓包、CNI/内核版本、请求结果和根因要按 [报告模板](evidence/report-template.md) 补齐，缺失信息标为 NOT VERIFIED。
+**LAB-02：Service targetPort 故障**（使用独立测试 Kubernetes 集群）：
+
+~~~bash
+export SRE_LAB_ALLOW_MUTATIONS=1  # 仅在确认当前连接为隔离测试集群后启用
+scripts/lab-service.sh setup
+scripts/lab-service.sh baseline
+scripts/lab-service.sh inject
+scripts/lab-service.sh fault
+scripts/lab-service.sh restore
+scripts/lab-service.sh verify
+scripts/lab-service.sh cleanup  # 删除独立实验工作负载，保留 namespace
+~~~
+
+[详细实验步骤与风险边界](scenarios/service/README.md)。除 LAB-02 外，其他五个故障场景当前仍主要是设计说明，尚无完整自动注入与验收。Kind 默认 CNI 不强制执行 NetworkPolicy，Calico、Cilium、Istio 应在独立适配环境安装。
+
+### 证据采集（路径修复与失败记录）
+
+证据固定写入仓库根目录 `evidence/<RUN_ID>/`（可设置 `EVIDENCE_DIR` 指向其他私人路径），**不再依赖当前工作目录**。baseline 可以自动创建 RUN_ID，但建议显式设置，fault/recovery 必须使用相同 RUN_ID：
+
+~~~bash
+export RUN_ID="dns-$(date -u +%Y%m%dT%H%M%SZ)"
+scripts/collect-evidence.sh dns baseline
+# 仅在隔离实验环境注入并实际复现后，再采集 fault
+scripts/collect-evidence.sh dns fault
+# 恢复并手动验证请求，再采集 recovery
+scripts/collect-evidence.sh dns recovery
+# dns 等非 Service 场景尚未实现自动验收，非零退出为预期
+scripts/verify-recovery.sh dns
+~~~
+
+只在 `service` 场景实现主动恢复检查；未实现的场景返回 `NOT_VERIFIED` 与非零退出。每阶段的单项采集错误写入 `command-status.tsv`，完整性需要人工核查。真实抓包、CNI/代理模式与根因仍需按 [报告模板](evidence/report-template.md) 补齐，缺失标为 NOT VERIFIED。
+
+## 本地自动化检查（不依赖集群）
+
+~~~bash
+bash -n scripts/*.sh
+python3 -m unittest discover -s tests -v
+~~~
+
+GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 Kubernetes E2E**。
 
 ## 六个场景
 
@@ -75,4 +107,4 @@ bash ../../scripts/verify-recovery.sh dns
 - 公开 evidence 前务必检查日志、地址、令牌及可能包含的敏感配置。
 - 所有命令输出随 Kubernetes、Linux 内核、CNI、Service Proxy 版本和模式变化，应记录实际版本。
 
-本仓库目前定位为 **学习材料与实验骨架**，不是已经完成的自动化网络故障平台。
+本仓库目前定位为 **学习材料 + 前两个实验的可执行脚本 + 离线契约测试**，不是经过真实集群全面验收的网络故障平台。

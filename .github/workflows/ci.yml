@@ -1,0 +1,16 @@
+name: Lab scripts (offline contracts)
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell syntax
+        run: bash -n scripts/*.sh
+      - name: Verify JSON helper available
+        run: jq --version
+      - name: Test mocked control paths (no cluster)
+        run: python3 -m unittest discover -s tests -v

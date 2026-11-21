@@ -33,6 +33,8 @@ API: Service + EndpointSlice ──> kube-proxy/CNI 监听 ──> 节点转发�
 
 ## 3. 诊断实验：同一客户端对比三种目标
 
+已新增 [LAB-02 可执行场景](../../scenarios/service/)：`scripts/lab-service.sh setup / baseline / inject / fault / restore / verify / cleanup`。需要确认 kubectl 当前上下文并显式设置 `SRE_LAB_ALLOW_MUTATIONS=1`；在专用测试集群中将 Service `targetPort` 从 `http` 故意改成 `5679`，让后端 PodIP 正常但 VIP 转发失败，然后恢复并验证。此实验无需断言 kube-proxy 的具体实现，适用于不同数据面模式。
+
 以下使用示例 namespace `demo`、Service `api`，运行前按真实资源替换；不修改集群资源。
 
 ~~~bash
