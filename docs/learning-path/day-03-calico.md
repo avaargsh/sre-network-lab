@@ -58,6 +58,10 @@ VM PMTU 黑洞仍待单独故障注入与恢复验收。可先使用 [LAB-03B �
 
 [LAB-03C](../../scenarios/mtu/tcp.md) 把 ICMP 大小包扩展到真实 64KiB HTTP POST：在同一隔离 Linux Router 中，MTU 1200 + 阻断 Frag Needed 会出现健康检查正常、大 POST 超时并重复传输 TCP 序号；设置 TCPMSS 1160 后大请求恢复，抓包也能看到 SYN-ACK MSS 和 TCP 数据段变小。注意 TCP offload、tcp_mtu_probing 和历史 PMTU 缓存会改变观察结果，必须记录实验系统设定。
 
+### 独立 VM 与单机 Namespace 的证据区别
+
+[LAB-03D](../../environments/vm/lab03d.md) 是由独立 VirtualBox VM 构成的两子网路由拓扑。相比同内核 Namespace，它必须通过不同 machine-id/boot-id、各自管理网卡及双向路由的真实验证。**目前只有代码与离线测试；尚无三 VM 真实运行和故障恢复证据**。
+
 ## 5. 90 秒口述模板
 
 “我先确认 Calico IPPool 和数据面模式，再根据流量路径拆成 Pod→Node、节点间 Underlay、隧道解封装和目标 Pod 四段。跨节点异常优先查看 PodCIDR 路由/BGP 或 VXLAN/IPIP 通道，并同步抓内外层报文、核对 MTU。如果仅有特定源或目的失败，再验证策略命中。恢复以后同时做小包、大包和 TCP 请求对照。”

@@ -1,3 +1,7 @@
+## LAB-03D · 三 VM Underlay 实验入口
+
+[完整操作手册](lab03d.md) 已包含三台独立 VirtualBox VM、两段 Internal Network、只读跨机路由/HTTP 验收与清理。CI 不具备真实 VirtualBox 三 VM E2E 证据，故障注入阶段尚未完成。
+
 # VM 环境说明
 
 用于复现复杂 Underlay、MTU、BGP 等 Kind 难以模拟的场景。

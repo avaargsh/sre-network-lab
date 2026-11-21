@@ -138,6 +138,12 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 
 已在单个隔离 Linux Runner 上，完成真实 64KiB HTTP POST 的正常→黑洞→MSS 缓解→恢复，并通过双端 PCAP 观察 TCP 重传、SYNACK MSS 与数据段大小变化。**未在两台独立 VM 或生产网络验收。**
 
+## LAB-03D · 三独立 VirtualBox VM Underlay 拓扑门禁（待实测）
+
+[启动与验证手册](environments/vm/lab03d.md) · [Vagrant VM 定义](environments/vm/Vagrantfile) · [跨机验收控制器](environments/vm/lab_vm.py)。
+
+已实现 src/router/dst 的内部数据网络、机器身份、跨网段路由和真实 64 KiB HTTP 基线的只读验证程序。**GitHub CI 仅运行离线契约测试；实际三 VM 启动、PCAP 和故障注入尚未验收。**
+
 ## 六个场景
 
 | 场景 | 内容 | 最低可接受证据 |
