@@ -31,7 +31,7 @@ def parse_attestation(output):
     lines = [line.strip()[len(ATTEST):] for line in output.splitlines()
              if line.strip().startswith(ATTEST)]
     if len(lines) != 1:
-        raise ValueError("expected exactly one in-guest signed-scope JSON line")
+        raise ValueError("expected exactly one in-guest scoped JSON line")
     record = json.loads(lines[0])
     if not isinstance(record, dict):
         raise ValueError("attestation is not JSON object")

@@ -30,6 +30,10 @@ DST = report("dst", "c"*32, "33333333-3333-4333-8333-333333333333",
              route={"gateway":"10.209.20.1","dev":"enp0s8","src":"10.209.20.2"})
 
 
+SRC["route"]["destination"] = "10.209.20.2"
+DST["route"]["destination"] = "10.209.10.2"
+
+
 class VMContracts(unittest.TestCase):
     def setUp(self):
         import copy
@@ -77,7 +81,7 @@ class VMContracts(unittest.TestCase):
             vm.require_independent_vms(self.reports)
 
     def test_attestation_line_parser_requires_one_exact_report(self):
-        line='noise\\nSRE_LAB_ATTEST={"role":"src","lab":"sre-lab03d-vbox-intnet"}\\n'
+        line='noise\nSRE_LAB_ATTEST={"role":"src","lab":"sre-lab03d-vbox-intnet"}\n'
         self.assertEqual(vm.parse_attestation(line)["role"],"src")
         with self.assertRaises(ValueError):
             vm.parse_attestation(line+line)
