@@ -32,6 +32,7 @@ cd ../..
 export RUN_ID="vm-topology-$(date -u +%Y%m%dT%H%M%SZ)"
 python3 environments/vm/lab_vm.py attest --run-id "$RUN_ID"
 python3 environments/vm/lab_vm.py baseline --run-id "$RUN_ID-http"
+python3 environments/vm/verify_vm_evidence.py "evidence/$RUN_ID-http"
 
 # 只有确认当前在该专用 Vagrant 工作目录后才清理：
 cd environments/vm

@@ -14,6 +14,8 @@ jobs:
         run: |
           ruby -c environments/vm/Vagrantfile
           ruby tests/check_vm_vagrant.rb
+      - name: Python VM guest and controller syntax
+        run: python3 -m py_compile environments/vm/*.py
       - name: Verify JSON helper available
         run: jq --version
       - name: Test mocked control paths (no cluster)
