@@ -48,6 +48,12 @@ sudo tcpdump -ni <UNDERLAY_IF> 'udp port 4789 or proto 4'
 
 LAB-04 实验重点是 Ingress、Egress 的分别隔离和多策略叠加。应从实际发起请求的客户端观察成功/失败，不能用“NetworkPolicy YAML 已创建”宣称策略生效；默认 kindnet 无此强制能力。
 
+### LAB-03 跨节点报文证据
+
+[LAB-03A](../../scenarios/mtu/) 的脚本固定不同 Worker，再从两侧节点 Underlay 抓包，关联内层 PodIP、外层节点 IP 和唯一 HTTP proof token。仅有 IPPool 配置或仅抓到任意 UDP 4789，都不足以独立证明具体请求走了跨节点 VXLAN。
+
+VM PMTU 黑洞仍待单独故障注入与恢复验收。
+
 ## 5. 90 秒口述模板
 
 “我先确认 Calico IPPool 和数据面模式，再根据流量路径拆成 Pod→Node、节点间 Underlay、隧道解封装和目标 Pod 四段。跨节点异常优先查看 PodCIDR 路由/BGP 或 VXLAN/IPIP 通道，并同步抓内外层报文、核对 MTU。如果仅有特定源或目的失败，再验证策略命中。恢复以后同时做小包、大包和 TCP 请求对照。”
