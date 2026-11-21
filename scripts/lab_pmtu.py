@@ -259,11 +259,9 @@ def main() -> int:
         fixture.evidence("recovery", ("large",))
         status = "PASS"
         print("LAB-03B fixture PASS (not independent-VM E2E)")
-        return 0
     except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
         print(f"LAB-03B NOT VERIFIED: {exc}", file=sys.stderr)
         (root / "failure.txt").write_text(str(exc) + "\n")
-        return 1
     finally:
         fixture.cleanup()
         remaining = {row.split()[0] for row in command("ip", "netns", "list", check=False).stdout.splitlines()
@@ -274,6 +272,8 @@ def main() -> int:
             "namespaces_remaining": sorted(set(NAMES).intersection(remaining)),
             "time": datetime.now(timezone.utc).isoformat()}, indent=2) + "\n")
         checksum(root)
+    # Never return GREEN if teardown left any reserved namespace behind.
+    return 0 if status == "PASS" else 1
 
 
 if __name__ == "__main__":

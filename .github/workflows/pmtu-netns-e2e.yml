@@ -39,7 +39,7 @@ jobs:
             fi
           done
       - name: Real kernel PMTU discovery and blackhole drill
-        run: sudo -E python3 scripts/lab_pmtu.py
+        run: sudo env SRE_LAB_ALLOW_MUTATIONS=1 SRE_LAB_SCOPE=dedicated-netns RUN_ID="$RUN_ID" EVIDENCE_DIR="$EVIDENCE_DIR" python3 scripts/lab_pmtu.py
       - name: Independently validate captured evidence and cleanup
         run: |
           python3 scripts/verify_pmtu_evidence.py "$EVIDENCE_DIR/$RUN_ID"
