@@ -91,6 +91,34 @@ class FaultSafetyContracts(unittest.TestCase):
             with self.assertRaises(ValueError):
                 fault.require_arm_preconditions(mtu, active)
 
+    def test_watchdog_armed_before_any_mtu_mutation(self):
+        from unittest.mock import patch
+        calls=[]
+        with (patch.object(fault,"current_mtu",side_effect=[1500,1200]),
+              patch.object(fault,"load_state",return_value=None),
+              patch.object(fault,"timer_active",side_effect=[False,True]),
+              patch.object(fault,"store_state"),
+              patch.object(fault,"cmd",side_effect=lambda *a, **kw: calls.append(a))):
+            receipt=fault.arm("safe-run01",guest_context())
+        self.assertEqual(receipt["status"],"ARMED")
+        self.assertEqual(calls[0][0],"systemd-run")
+        self.assertEqual(calls[1][:2],("ip","link"))
+
+    def test_unarmed_timer_prevents_any_mtu_mutation(self):
+        from unittest.mock import patch
+        calls=[]
+        with (patch.object(fault,"current_mtu",return_value=1500),
+              patch.object(fault,"load_state",return_value=None),
+              patch.object(fault,"timer_active",return_value=False),
+              patch.object(fault,"store_state"),
+              patch.object(fault,"restore") as rollback,
+              patch.object(fault,"cmd",side_effect=lambda *a, **kw: calls.append(a))):
+            with self.assertRaises(RuntimeError):
+                fault.arm("safe-run01",guest_context())
+        self.assertEqual(len(calls),1)
+        self.assertEqual(calls[0][0],"systemd-run")
+        rollback.assert_called_once()
+
     def test_remote_operations_are_closed_and_bounded(self):
         for op in ("arm", "inspect", "restore"):
             args = fault.remote_argv(op, "safe-run01")
