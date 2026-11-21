@@ -59,6 +59,7 @@ Vagrant.configure("2") do |config|
             systemctl daemon-reload
             systemctl enable --now sre-lab03d-http.service
           else
+            install -D -m 0755 /vagrant/environments/vm/router_fault.py /usr/local/libexec/sre-lab03d-router-fault.py
             printf '%s\\n' 'net.ipv4.ip_forward=1' > /etc/sysctl.d/90-sre-lab03d.conf
             sysctl -w net.ipv4.ip_forward=1
           fi
