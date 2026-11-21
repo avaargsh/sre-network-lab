@@ -11,7 +11,9 @@ jobs:
       - name: Check shell syntax
         run: bash -n scripts/*.sh
       - name: Check Vagrantfile Ruby syntax
-        run: ruby -c environments/vm/Vagrantfile
+        run: |
+          ruby -c environments/vm/Vagrantfile
+          ruby tests/check_vm_vagrant.rb
       - name: Verify JSON helper available
         run: jq --version
       - name: Test mocked control paths (no cluster)

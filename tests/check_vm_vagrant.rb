@@ -19,7 +19,7 @@ class FakeVM
     vm = FakeVM.new
     yield vm
     @networks.concat(vm.networks.map { |n| [role, n] })
-    @provisioners[role] = vm.provisioners[role]
+    @provisioners[role] = vm.provisioners.values.first
   end
   def network(type, **options)
     raise "unexpected non-private NIC" unless type == "private_network"
@@ -47,7 +47,7 @@ module Vagrant
       raise "missing provisioning script for #{role}" unless script
       stdout, stderr, status = Open3.capture3("bash", "-n", stdin_data: script)
       raise "#{role}: invalid generated shell: #{stderr}" unless status.success?
-      raise "#{role}: identity marker missing" unless script.include?("role\\\":\\\"#{role}")
+      raise "#{role}: identity marker missing" unless script.include?('"role":"' + role + '"')
       raise "#{role}: raw heredoc not closed" unless role != "dst" ||
           script.match?(/^SERVICE$/)
     end
