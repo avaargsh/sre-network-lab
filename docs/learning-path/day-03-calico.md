@@ -54,6 +54,10 @@ LAB-04 实验重点是 Ingress、Egress 的分别隔离和多策略叠加。应�
 
 VM PMTU 黑洞仍待单独故障注入与恢复验收。可先使用 [LAB-03B 真实 Linux netns PMTU 实验](../../scenarios/mtu/pmtu.md)，通过 `ping -M probe` 的大小包对照、两侧抓包、ICMP Type 3 Code 4 和恢复矩阵理解机制。
 
+### TCP PMTU 黑洞与 MSS 缓解
+
+[LAB-03C](../../scenarios/mtu/tcp.md) 把 ICMP 大小包扩展到真实 64KiB HTTP POST：在同一隔离 Linux Router 中，MTU 1200 + 阻断 Frag Needed 会出现健康检查正常、大 POST 超时并重复传输 TCP 序号；设置 TCPMSS 1160 后大请求恢复，抓包也能看到 SYN-ACK MSS 和 TCP 数据段变小。注意 TCP offload、tcp_mtu_probing 和历史 PMTU 缓存会改变观察结果，必须记录实验系统设定。
+
 ## 5. 90 秒口述模板
 
 “我先确认 Calico IPPool 和数据面模式，再根据流量路径拆成 Pod→Node、节点间 Underlay、隧道解封装和目标 Pod 四段。跨节点异常优先查看 PodCIDR 路由/BGP 或 VXLAN/IPIP 通道，并同步抓内外层报文、核对 MTU。如果仅有特定源或目的失败，再验证策略命中。恢复以后同时做小包、大包和 TCP 请求对照。”

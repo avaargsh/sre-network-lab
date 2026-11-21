@@ -132,6 +132,12 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 
 已在一次性 Linux Runner 的**三个隔离 network namespace** 完成真实内核 MTU 黑洞、ICMP Fragmentation Needed 与恢复验收，保留双接口 PCAP 和 SHA-256 证据。**尚未完成独立双 VM 的真实 Underlay/TCP 业务验收。**
 
+## LAB-03C · TCP PMTU 黑洞与 MSS 缓解
+
+[操作说明](scenarios/mtu/tcp.md) · [真实 Linux E2E 验收](docs/verification/2026-11-21-tcp-pmtu-mss-e2e.md) · [独立 GitHub Actions](.github/workflows/pmtu-tcp-e2e.yml)。
+
+已在单个隔离 Linux Runner 上，完成真实 64KiB HTTP POST 的正常→黑洞→MSS 缓解→恢复，并通过双端 PCAP 观察 TCP 重传、SYNACK MSS 与数据段大小变化。**未在两台独立 VM 或生产网络验收。**
+
 ## 六个场景
 
 | 场景 | 内容 | 最低可接受证据 |
@@ -150,4 +156,4 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 - 公开 evidence 前务必检查日志、地址、令牌及可能包含的敏感配置。
 - 所有命令输出随 Kubernetes、Linux 内核、CNI、Service Proxy 版本和模式变化，应记录实际版本。
 
-本仓库已验证 LAB-01/02、LAB-03A 和 LAB-04 的 Kind 数据面，并完成 LAB-03B 的隔离 Linux netns PMTU 故障与恢复。独立双 VM、Envoy 和 Istio 场景仍未完成真实 E2E。
+本仓库已验证 LAB-01/02、LAB-03A 和 LAB-04 的 Kind 数据面，LAB-03B Linux ICMP PMTU 故障，以及 LAB-03C 真实 TCP/HTTP 黑洞、MSS 缓解和恢复。独立双 VM、Envoy 与 Istio 尚未完成真实 E2E。
