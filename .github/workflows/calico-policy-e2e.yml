@@ -1,0 +1,95 @@
+name: Calico NetworkPolicy integration (LAB-04)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/calico-policy-e2e.yml'
+      - 'scripts/lab-policy.sh'
+      - 'scripts/collect-evidence.sh'
+      - 'scripts/verify-recovery.sh'
+      - 'scenarios/network-policy/**'
+      - 'environments/kind/calico*.yaml'
+      - 'tests/test_policy_lab.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  policy-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SRE_LAB_ALLOW_MUTATIONS: "1"
+      SRE_LAB_EXPECT_CONTEXT: kind-sre-policy-lab
+      EVIDENCE_DIR: /tmp/sre-policy-evidence
+      LAB_ATTEMPTS: "12"
+      LAB_RETRY_DELAY: "2"
+      CALICO_COMMIT: d95e175f6be5a0e8ed29645ac8faedf08bd800e7 # v3.33.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Create dedicated Kind cluster without kindnet
+        uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
+        with:
+          cluster_name: sre-policy-lab
+          config: environments/kind/calico.yaml
+          wait: 0s # CNI disabled: nodes become Ready only after Calico is installed
+      - name: Install Calico Operator (pinned upstream commit)
+        run: |
+          set -euo pipefail
+          kubectl config current-context
+          test "$(kubectl config current-context)" = "$SRE_LAB_EXPECT_CONTEXT"
+          URL="https://raw.githubusercontent.com/projectcalico/calico/$CALICO_COMMIT/manifests"
+          curl -fsSL --retry 3 "$URL/v3_projectcalico_org.yaml" -o /tmp/calico-crds.yaml
+          curl -fsSL --retry 3 "$URL/tigera-operator.yaml" -o /tmp/tigera-operator.yaml
+          kubectl create -f /tmp/calico-crds.yaml
+          kubectl create -f /tmp/tigera-operator.yaml
+          kubectl wait --for=condition=Established crd/installations.operator.tigera.io --timeout=180s
+          kubectl apply -f environments/kind/calico-installation.yaml
+          # The Operator reconciles asynchronously; namespace and DaemonSet do not
+          # exist immediately after the Installation CR is accepted.
+          for i in $(seq 1 90); do
+            if kubectl get namespace calico-system >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          kubectl get namespace calico-system
+          for i in $(seq 1 120); do
+            if kubectl -n calico-system get daemonset calico-node >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          kubectl -n calico-system get daemonset calico-node
+          kubectl -n calico-system rollout status daemonset/calico-node --timeout=480s
+          kubectl wait --for=condition=Ready node --all --timeout=240s
+          kubectl -n kube-system rollout status deployment/coredns --timeout=240s
+          kubectl get ippools.projectcalico.org -o yaml
+          kubectl -n calico-system get pods -o wide
+      - name: LAB-04 ingress egress and additive policy matrix
+        run: |
+          set -euo pipefail
+          export RUN_ID="policy-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          trap 'scripts/lab-policy.sh restore >/dev/null 2>&1 || true; scripts/lab-policy.sh cleanup || true' EXIT
+          scripts/lab-policy.sh setup
+          scripts/collect-evidence.sh network-policy baseline
+          scripts/lab-policy.sh inject-ingress
+          scripts/collect-evidence.sh network-policy ingress
+          scripts/lab-policy.sh inject-egress
+          scripts/collect-evidence.sh network-policy egress
+          scripts/lab-policy.sh inject-additive
+          scripts/collect-evidence.sh network-policy additive
+          scripts/lab-policy.sh restore
+          scripts/verify-recovery.sh network-policy
+          scripts/collect-evidence.sh network-policy recovery
+      - name: Debug on failure (ephemeral cluster only)
+        if: failure()
+        run: |
+          kubectl get nodes -o wide || true
+          kubectl get tigerastatus || true
+          kubectl get pods -A -o wide || true
+          kubectl -n sre-lab-policy get networkpolicies -o yaml || true
+          kubectl -n calico-system get pods -o wide || true
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: calico-policy-evidence
+          path: /tmp/sre-policy-evidence/
+          retention-days: 7
+          if-no-files-found: warn

@@ -1,0 +1,10 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lab-deny-egress-blocked
+  namespace: sre-lab-policy
+  labels: {app.kubernetes.io/part-of: sre-network-lab}
+spec:
+  podSelector: {matchLabels: {app: lab-policy-blocked}}
+  policyTypes: [Egress]
+  egress: []

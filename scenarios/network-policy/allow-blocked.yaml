@@ -1,0 +1,13 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lab-allow-blocked
+  namespace: sre-lab-policy
+  labels: {app.kubernetes.io/part-of: sre-network-lab}
+spec:
+  podSelector: {matchLabels: {app: lab-policy-server}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app: lab-policy-blocked}}
+      ports: [{protocol: TCP, port: 5678}]

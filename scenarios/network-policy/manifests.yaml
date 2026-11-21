@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sre-lab-policy
+  labels:
+    sre-network-lab.io/owner: policy-lab
+    app.kubernetes.io/part-of: sre-network-lab
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab-policy-server
+  namespace: sre-lab-policy
+  labels: {app.kubernetes.io/part-of: sre-network-lab}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: lab-policy-server}}
+  template:
+    metadata:
+      labels: {app: lab-policy-server}
+    spec:
+      containers:
+        - name: echo
+          image: hashicorp/http-echo:1.0.0
+          args: ["-listen=:5678", "-text=sre-network-lab-policy-ok"]
+          ports: [{name: http, containerPort: 5678}]
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 1
+            periodSeconds: 3
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 200m, memory: 64Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab-policy-allowed
+  namespace: sre-lab-policy
+  labels: {app.kubernetes.io/part-of: sre-network-lab}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: lab-policy-allowed}}
+  template:
+    metadata:
+      labels: {app: lab-policy-allowed}
+    spec:
+      containers:
+        - name: probe
+          image: nicolaka/netshoot:v0.14
+          command: ["sleep", "infinity"]
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab-policy-blocked
+  namespace: sre-lab-policy
+  labels: {app.kubernetes.io/part-of: sre-network-lab}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: lab-policy-blocked}}
+  template:
+    metadata:
+      labels: {app: lab-policy-blocked}
+    spec:
+      containers:
+        - name: probe
+          image: nicolaka/netshoot:v0.14
+          command: ["sleep", "infinity"]
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab-policy-server
+  namespace: sre-lab-policy
+  labels: {app.kubernetes.io/part-of: sre-network-lab}
+spec:
+  selector: {app: lab-policy-server}
+  ports:
+    - {name: http, protocol: TCP, port: 80, targetPort: http}

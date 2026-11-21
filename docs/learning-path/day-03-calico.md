@@ -44,7 +44,9 @@ sudo tcpdump -ni <UNDERLAY_IF> 'udp port 4789 or proto 4'
 - **不要在生产集群直接修改物理网卡、VXLAN 接口或节点 MTU**。需要真正 PMTU 黑洞时使用可清理的 VM 拓扑。
 - 对疑似安全策略拒绝，用有能力的 CNI 观测验证，不能简单以未出现 deny 日志判断“无拦截”。
 
-配套：[LAB-03 MTU](../../scenarios/mtu/) · [LAB-04 NetworkPolicy](../../scenarios/network-policy/)。
+配套：[LAB-03 MTU](../../scenarios/mtu/) · [LAB-04 NetworkPolicy](../../scenarios/network-policy/) · [Calico 专用 Kind 环境](../../environments/kind/calico-policy.md)。
+
+LAB-04 实验重点是 Ingress、Egress 的分别隔离和多策略叠加。应从实际发起请求的客户端观察成功/失败，不能用“NetworkPolicy YAML 已创建”宣称策略生效；默认 kindnet 无此强制能力。
 
 ## 5. 90 秒口述模板
 

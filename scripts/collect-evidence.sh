@@ -8,7 +8,12 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 SCENARIO=${1:-}
 PHASE=${2:-}
 case "$SCENARIO" in dns|service|mtu|network-policy|envoy-503|istio-mtls) ;; *) echo "Unsupported scenario: $SCENARIO" >&2; exit 2 ;; esac
-case "$PHASE" in baseline|fault|recovery) ;; *) echo "Usage: $0 <scenario> <baseline|fault|recovery>" >&2; exit 2 ;; esac
+case "$SCENARIO:$PHASE" in
+  network-policy:baseline|network-policy:ingress|network-policy:egress|network-policy:additive|network-policy:recovery) ;;
+  dns:baseline|dns:fault|dns:recovery|service:baseline|service:fault|service:recovery) ;;
+  mtu:baseline|mtu:fault|mtu:recovery|envoy-503:baseline|envoy-503:fault|envoy-503:recovery|istio-mtls:baseline|istio-mtls:fault|istio-mtls:recovery) ;;
+  *) echo "Unsupported scenario/phase: $SCENARIO/$PHASE" >&2; exit 2 ;;
+esac
 command -v kubectl >/dev/null || { echo 'kubectl required' >&2; exit 1; }
 command -v jq >/dev/null || { echo 'jq required' >&2; exit 1; }
 
@@ -69,7 +74,15 @@ case "$SCENARIO" in
     capture lab-probe "$ROOT/scripts/lab-service.sh" "$action"
     PROBE_RC=$LAST_RC
     ;;
-  network-policy) capture policies kubectl get networkpolicy -A -o yaml ;;
+  network-policy)
+    capture policies kubectl -n sre-lab-policy get networkpolicy -o yaml
+    capture calico-ippools kubectl get ippools.projectcalico.org -o yaml
+    capture calico-operator kubectl get installation.operator.tigera.io default -o yaml
+    capture calico-nodes kubectl -n calico-system get pods -o wide
+    if [[ "$PHASE" == recovery ]]; then action=verify; else action=$PHASE; fi
+    capture lab-probe "$ROOT/scripts/lab-policy.sh" "$action"
+    PROBE_RC=$LAST_RC
+    ;;
   envoy-503|istio-mtls)
     if command -v istioctl >/dev/null; then capture proxy-status istioctl proxy-status; else echo -e 'proxy-status\t127' >> "$STATUS"; fi
     ;;
@@ -94,6 +107,6 @@ jq -n --arg scenario "$SCENARIO" --arg phase "$PHASE" --arg run_id "$RUN_ID" --a
     probe_status:(if $probe_rc==0 then "PASS" elif $probe_rc==3 then "NOT_VERIFIED" else "FAILED" end)}' > "$OUT/phase-status.json"
 ( cd "$OUT" && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum ) > "$OUT/SHA256SUMS"
 printf 'Evidence: %s\nRUN_ID: %s\nReview command-status.tsv and phase-status.json before publishing\n' "$OUT" "$RUN_ID"
-if [[ "$SCENARIO" == dns || "$SCENARIO" == service ]]; then
+if [[ "$SCENARIO" == dns || "$SCENARIO" == service || "$SCENARIO" == network-policy ]]; then
   (( PROBE_RC == 0 )) || { echo "CRITICAL: $SCENARIO $PHASE probe failed; see lab-probe.err/out" >&2; exit 1; }
 fi
