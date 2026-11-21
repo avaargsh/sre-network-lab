@@ -124,7 +124,7 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 
 [详细实验流程与验收范围](scenarios/mtu/README.md) · [实现代码](scripts/lab_cross_node.py)。
 
-本阶段只要求不同 Worker 的 PodIP/ClusterIP 请求与双节点 VXLAN PCAP 的唯一 HTTP proof token 关联。**VM MTU/PMTU 故障注入仍待开发**，不能用 Kind 的数据代替物理网络故障证据。
+已完成真实 Kind + Calico 双节点 VXLAN 验收，见 [2026-11-21 验收报告](docs/verification/2026-11-21-cross-node-vxlan-e2e.md)：源/目的 Worker 不同，双节点 PCAP 关联唯一 HTTP proof token，Baseline/Capture/Recheck 均通过。**VM MTU/PMTU 故障注入仍待开发**，不能用 Kind 的数据代替物理网络故障证据。
 
 ## 六个场景
 
