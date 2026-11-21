@@ -54,6 +54,10 @@ python3 scripts/lab_cross_node.py cleanup
 
 **目前不宣称** VM MTU 黑洞、PMTUD、ICMP Fragmentation Needed、物理交换机或 RoCE 网络已经得到验证。即使 Kind UDP 4789 取证通过，也仅证明 Docker Underlay 中的跨节点封装。
 
+## LAB-03B · 新增 Linux 内核 PMTU 实验
+
+[真实 Linux 网络命名空间四阶段实验](pmtu.md)，包含大包 DF、ICMP 被阻断、返回 Frag Needed 和恢复；独立真实 VM/Underlay 仍待验收。
+
 ## LAB-03B：后续 VM MTU / PMTU 故障
 
 独立 VM 验收必须补充真实小包/大包差异、DF 与 ICMP 返回、两端抓包、受控故障注入和自动回滚，并在故障恢复后重复业务请求。不能在生产节点直接改变 MTU 或防火墙。

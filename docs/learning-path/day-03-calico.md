@@ -52,7 +52,7 @@ LAB-04 实验重点是 Ingress、Egress 的分别隔离和多策略叠加。应�
 
 [LAB-03A](../../scenarios/mtu/) 的脚本固定不同 Worker，再从两侧节点 Underlay 抓包，关联内层 PodIP、外层节点 IP 和唯一 HTTP proof token。仅有 IPPool 配置或仅抓到任意 UDP 4789，都不足以独立证明具体请求走了跨节点 VXLAN。
 
-VM PMTU 黑洞仍待单独故障注入与恢复验收。
+VM PMTU 黑洞仍待单独故障注入与恢复验收。可先使用 [LAB-03B 真实 Linux netns PMTU 实验](../../scenarios/mtu/pmtu.md)，通过 `ping -M probe` 的大小包对照、两侧抓包、ICMP Type 3 Code 4 和恢复矩阵理解机制。
 
 ## 5. 90 秒口述模板
 

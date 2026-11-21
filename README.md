@@ -126,6 +126,12 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 
 已完成真实 Kind + Calico 双节点 VXLAN 验收，见 [2026-11-21 验收报告](docs/verification/2026-11-21-cross-node-vxlan-e2e.md)：源/目的 Worker 不同，双节点 PCAP 关联唯一 HTTP proof token，Baseline/Capture/Recheck 均通过。**VM MTU/PMTU 故障注入仍待开发**，不能用 Kind 的数据代替物理网络故障证据。
 
+## LAB-03B · Linux PMTU 故障演练
+
+[四阶段实验与安全说明](scenarios/mtu/pmtu.md) · [实验控制器](scripts/lab_pmtu.py) · [独立证据校验器](scripts/verify_pmtu_evidence.py)。
+
+在一次性 Linux VM/Runner 中使用三组独立 Network Namespace 复现 MTU 缩小、ICMP Fragmentation Needed 丢失、大包超时与恢复。**这不是独立双 VM Underlay 的真实验收**。是否通过以最新 [PMTU Kernel E2E 工作流](.github/workflows/pmtu-netns-e2e.yml) 和证据为准。
+
 ## 六个场景
 
 | 场景 | 内容 | 最低可接受证据 |
@@ -144,4 +150,4 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 - 公开 evidence 前务必检查日志、地址、令牌及可能包含的敏感配置。
 - 所有命令输出随 Kubernetes、Linux 内核、CNI、Service Proxy 版本和模式变化，应记录实际版本。
 
-本仓库目前定位为 **学习材料 + LAB-01/02 已实跑集成测试 + LAB-04 已真实验收 + LAB-03A 跨节点抓包待真实 CI 验收**，不是经过真实集群全面验收的网络故障平台。
+本仓库目前定位为 **学习材料 + LAB-01/02 已实跑集成测试 + LAB-04 已真实验收 + LAB-03A 跨节点 VXLAN 已真实验收，LAB-03B Linux netns PMTU 演练独立验收**，不是经过真实集群全面验收的网络故障平台。
