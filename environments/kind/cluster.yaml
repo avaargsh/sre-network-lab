@@ -1,0 +1,11 @@
+# Base Kind cluster for L2/L3 Pod and Service labs.
+# Kind's default CNI (kindnet) does NOT enforce Kubernetes NetworkPolicy.
+# For Calico/Cilium labs, create a separate dedicated cluster with their documented
+# install options; do not stack multiple CNIs in this baseline cluster.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: sre-network-lab
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker
