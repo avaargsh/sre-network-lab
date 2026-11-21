@@ -58,6 +58,10 @@ python3 scripts/lab_cross_node.py cleanup
 
 [真实 Linux 网络命名空间四阶段实验](pmtu.md)，包含大包 DF、ICMP 被阻断、返回 Frag Needed 和恢复；独立真实 VM/Underlay 仍待验收。
 
+## LAB-03C · TCP HTTP/MSS 实验
+
+[TCP/HTTP 黑洞、重传与 MSS 缓解实验](tcp.md) · [真实 E2E 报告](../../docs/verification/2026-11-21-tcp-pmtu-mss-e2e.md)。独立 Linux Router Namespace 两侧 PCAP 证明真实 TCP 数据段和业务响应的变化，不应冒充双 VM。
+
 ## LAB-03B：后续 VM MTU / PMTU 故障
 
 独立 VM 验收必须补充真实小包/大包差异、DF 与 ICMP 返回、两端抓包、受控故障注入和自动回滚，并在故障恢复后重复业务请求。不能在生产节点直接改变 MTU 或防火墙。
