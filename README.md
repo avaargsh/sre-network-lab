@@ -138,6 +138,12 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 
 已在单个隔离 Linux Runner 上，完成真实 64KiB HTTP POST 的正常→黑洞→MSS 缓解→恢复，并通过双端 PCAP 观察 TCP 重传、SYNACK MSS 与数据段大小变化。**未在两台独立 VM 或生产网络验收。**
 
+## LAB-03D Stage 2B：三 VM 四接口 TCP PCAP 工具（待真实实测）
+
+[操作手册](environments/vm/lab03d.md) · [Guest 抓包](environments/vm/pcap_vm.py) · [Host 协调器](environments/vm/vm_pcap_baseline.py) · [独立证据验收](environments/vm/verify_vm_pcap.py)。
+
+现已实现固定私网接口合成流量的限时 PCAP 抓取及真实 TCP SYN/数据段关联规则；**缺少实际独立 VM 的完整四点抓包实测**，不能把离线通过等同于生产 PMTU 闭环。
+
 ## LAB-03D Stage 2A · 90 秒 MTU 租约和自动回滚（待真实三 VM 验收）
 
 [Router watchdog/恢复手册](environments/vm/lab03d.md) · [Root Helper](environments/vm/router_fault.py) · [Host 控制器](environments/vm/vm_mtu_drill.py) · [独立证据校验](environments/vm/verify_vm_fault.py)。

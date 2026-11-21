@@ -107,3 +107,35 @@ vagrant ssh router -c "sudo -n python3 /usr/local/libexec/sre-lab03d-router-faul
 证据位于 `evidence/<RUN_ID>`：Router 租约、定时器回执、故障和恢复的 HTTP 结果、独立虚拟机拓扑与 SHA256SUMS。通过 `verify_vm_fault.py` 复验；此阶段 `pcap`、`blackhole`、`network` 三项仍强制标为 NOT_VERIFIED。
 
 **后续阶段**：在真 VM 上验收 90 秒 watchdog（含 SSH 中断）、三 VM 多点 PCAP、ICMP 丢失的真实黑洞及 TCP/MSS 恢复。没有这些独立证据，Issue #6 继续 OPEN。
+
+
+## Stage 2B：三独立 VM 四接口抓包基线（程序已实现，真实环境待验证）
+
+本阶段不更改接口 MTU，也不注入防火墙规则。先用真实合成 HTTP 流量验证四个捕获点：
+
+| Guest | 捕获私网 IP | PCAP 文件 |
+| --- | --- | --- |
+| src | 10.209.10.2 | `src.pcap` |
+| router 左口 | 10.209.10.1 | `router-left.pcap` |
+| router 右口 | 10.209.20.1 | `router-right.pcap` |
+| dst | 10.209.20.2 | `dst.pcap` |
+
+Guest 仅允许运行固定 TCP/18080、源/目标地址的 BPF；systemd 强制最长 120 秒和每接口 512 包。每份 PCAP 限 256 KiB，不能指定任意宿主机、接口或过滤器。需在隔离 VirtualBox 实验宿主机操作。
+
+~~~bash
+cd environments/vm
+vagrant up --provider=virtualbox
+for role in src router dst; do vagrant provision "$role"; done
+cd ../..
+
+RUN_ID="pcap-vm-$(date -u +%Y%m%d%H%M%S)"
+python3 environments/vm/lab_vm.py baseline --run-id "$RUN_ID-pre"
+python3 environments/vm/vm_pcap_baseline.py baseline-pcap --run-id "$RUN_ID"
+python3 environments/vm/verify_vm_pcap.py "evidence/$RUN_ID"
+~~~
+
+Host 控制器先验证三台 VM 的独立机器/启动身份、管理网卡隔离、双向路由和 HTTP 64 KiB POST；然后分别启动三 VM 上四个限时捕获服务，运行新的 GET/POST，最后停止并导出四份 PCAP。即使发生 HTTP 错误，也会尝试停止已启动的捕获服务；最长存活时间由 systemd 控制。
+
+证据存放在 `evidence/<RUN_ID>`：三 VM 拓扑、HTTP JSON、四个二进制 PCAP、四接口元数据、SHA256SUMS 与状态。独立校验要求**同一个客户端 TCP SYN**（同源端口和初始 Seq）在四份文件中都能观察到，并在四处观察到该流量的数据段，同时重新验证 HTTP 和全部文件哈希。校验失败时不能留存 PASS 状态。
+
+**证据边界**：截至本次提交，没有三台真实 VirtualBox VM 的跨机 PCAP Artifact。GitHub Actions 只验证合成数据与代码逻辑。Router MTU 注入、真实三 VM 的 90 秒回滚、PMTU 黑洞和 MSS 缓解仍未完成实测，Issue #6 保持 OPEN。
