@@ -14,7 +14,7 @@ VM=ROOT/"environments"/"vm"
 sys.path.insert(0,str(VM))
 sys.path.insert(0,str(ROOT/"tests"))
 from test_vm_underlay import SRC, ROUTER, DST
-from test_vm_pcap import frame, packet_file
+from test_vm_pcap import frame, packet_file, post_frames
 spec=importlib.util.spec_from_file_location("vm_pcap_baseline",VM/"vm_pcap_baseline.py")
 host=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(host)
@@ -27,7 +27,7 @@ def finished(role,run_id):
            "dst":{"dst":"enp0s8"}}[role]
     output={}
     for side,iface in sides.items():
-        data=packet_file(frame(),frame(flags=24,payload=b"hello"))
+        data=packet_file(*post_frames())
         output[side]={"interface":iface,"size":len(data),
                       "sha256":hashlib.sha256(data).hexdigest(),
                       "data":base64.b64encode(data).decode("ascii")}

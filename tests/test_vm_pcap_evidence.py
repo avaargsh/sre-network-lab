@@ -13,7 +13,7 @@ VM=ROOT/"environments"/"vm"
 sys.path.insert(0,str(VM))
 sys.path.insert(0,str(ROOT/"tests"))
 from test_vm_underlay import SRC, ROUTER, DST
-from test_vm_pcap import packet_file, frame
+from test_vm_pcap import packet_file, frame, post_frames
 spec=importlib.util.spec_from_file_location("verify_vm_pcap",VM/"verify_vm_pcap.py")
 auditor=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auditor)
@@ -37,7 +37,7 @@ class AuditedCapture(unittest.TestCase):
             "router-right":("router","10.209.20.1","enp0s9"),
             "dst":("dst","10.209.20.2","enp0s8"),
         }.items():
-            blob=packet_file(frame(),frame(flags=24,payload=b"request"))
+            blob=packet_file(*post_frames())
             self.pcap[side]=blob
             self.meta[side]={"role":role,"private_ip":ip,"interface":iface,
                              "size":len(blob),"sha256":hashlib.sha256(blob).hexdigest()}

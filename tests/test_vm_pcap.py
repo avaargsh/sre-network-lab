@@ -29,9 +29,19 @@ def frame(src="10.209.10.2",dst="10.209.20.2",sport=45000,
 def packet_file(*frames):
     out=bytearray(struct.pack("<IHHIIII",0xa1b2c3d4,2,4,0,0,160,1))
     for f in frames:
-        out.extend(struct.pack("<IIII",123,0,len(f),len(f)))
-        out.extend(f)
+        captured = f[:160]
+        out.extend(struct.pack("<IIII",123,0,len(captured),len(f)))
+        out.extend(captured)
     return bytes(out)
+
+POST_HEADER = b"POST /upload HTTP/1.1\r\nHost: 10.209.20.2\r\nContent-Length: 65536\r\n\r\n"
+
+def post_frames():
+    return (
+        frame(seq=99,flags=2),
+        frame(seq=100,flags=24,payload=POST_HEADER),
+        frame(seq=100+len(POST_HEADER),flags=24,payload=b"x"*1400),
+    )
 
 class CaptureSafety(unittest.TestCase):
     def test_fixed_four_interfaces_only(self):
@@ -106,7 +116,7 @@ class CaptureAudit(unittest.TestCase):
                 v.decode_pcap(bad)
 
     def test_same_handshake_on_all_four_points_required(self):
-        a=v.decode_pcap(packet_file(frame(),frame(flags=24,payload=b"real")))
+        a=v.decode_pcap(packet_file(*post_frames()))
         captures={"src":a,"router-left":a,"router-right":a,"dst":a}
         v.require_four_point_flow(captures)
         captures["dst"]=v.decode_pcap(packet_file(frame(sport=45001)))
@@ -114,10 +124,10 @@ class CaptureAudit(unittest.TestCase):
             v.require_four_point_flow(captures)
 
     def test_router_outbound_tcp_data_required(self):
-        syn=v.decode_pcap(packet_file(frame()))
-        payload=v.decode_pcap(packet_file(frame(flags=24,payload=b"request")))
-        captures={"src":syn+payload,"router-left":syn+payload,
-                  "router-right":syn,"dst":syn+payload}
+        full=v.decode_pcap(packet_file(*post_frames()))
+        no_body=v.decode_pcap(packet_file(*post_frames()[:2]))
+        captures={"src":full,"router-left":full,
+                  "router-right":no_body,"dst":full}
         with self.assertRaises(ValueError):
             v.require_four_point_flow(captures)
 

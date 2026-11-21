@@ -11,6 +11,7 @@ import unittest
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"environments"/"vm"))
+sys.path.insert(0,str(ROOT/"tests"))
 from test_vm_pcap import frame
 spec=importlib.util.spec_from_file_location(
     "verify_vm_pcap",ROOT/"environments"/"vm"/"verify_vm_pcap.py")
