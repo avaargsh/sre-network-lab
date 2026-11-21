@@ -70,6 +70,8 @@ class CaptureSafety(unittest.TestCase):
         self.assertIn("-c",a)
         self.assertIn("512",a)
         self.assertIn("18080",a)
+        # Short HTTP exchanges previously caused empty PCAP on buffered capture.
+        self.assertIn("--immediate-mode",a)
         self.assertNotIn("enp0s3",str(a))
 
     def test_malformed_run_identifier_is_rejected(self):
