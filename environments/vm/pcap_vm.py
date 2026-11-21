@@ -80,7 +80,7 @@ def capture_command(run_id: str, side: str, iface: str) -> tuple[str, ...]:
     return (
         "systemd-run", "--unit=" + name, "--service-type=exec",
         "--property=RuntimeMaxSec=120s", "--property=NoNewPrivileges=yes",
-        "/usr/bin/tcpdump", "-i", iface, "-n", "-U", "-s", "160",
+        "/usr/bin/tcpdump", "-Z", "root", "-i", iface, "-n", "-U", "-s", "160",
         "-c", "512", "-w", str(capture_path(run_id, side)),
         "tcp", "and", "host", SRC, "and", "host", DST,
         "and", "port", PORT
