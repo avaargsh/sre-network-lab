@@ -35,7 +35,7 @@ cd sre-network-lab
 kind create cluster --config environments/kind/cluster.yaml
 kubectl config current-context   # 应为 kind-sre-network-lab
 kubectl get nodes -o wide        # 确认所有节点 Ready
-scripts/preflight.sh
+bash scripts/preflight.sh  # 可选：会创建 node debug 临时 Pod 并尝试交互
 ~~~
 
 然后选择 [DNS](scenarios/dns/) 或 [Service](scenarios/service/) 场景阅读对应 README。**目前六个场景主要是实验说明和命令模板，不代表已经具备全部自动注入 YAML 或自动验收。** 默认 Kind CNI 不保证 NetworkPolicy 生效，Calico、Cilium、Istio 需单独搭建适配环境。
@@ -47,12 +47,12 @@ scripts/preflight.sh
 ~~~bash
 cd scenarios/dns
 export RUN_ID="dns-$(date +%Y%m%d-%H%M%S)"
-../../scripts/collect-evidence.sh dns baseline
+bash ../../scripts/collect-evidence.sh dns baseline
 # 只在隔离实验环境内注入故障，随后采集 fault
-../../scripts/collect-evidence.sh dns fault
+bash ../../scripts/collect-evidence.sh dns fault
 # 恢复服务并手动验证请求后，采集 recovery
-../../scripts/collect-evidence.sh dns recovery
-../../scripts/verify-recovery.sh dns
+bash ../../scripts/collect-evidence.sh dns recovery
+bash ../../scripts/verify-recovery.sh dns
 ~~~
 
 本仓库的验证脚本对部分场景仍为占位行为。成功退出不等于真实恢复验证通过。抓包、CNI/内核版本、请求结果和根因要按 [报告模板](evidence/report-template.md) 补齐，缺失信息标为 NOT VERIFIED。

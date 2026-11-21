@@ -22,15 +22,15 @@
 ~~~bash
 cd scenarios/dns
 export RUN_ID="lab01-$(date +%Y%m%d-%H%M%S)"
-../../scripts/preflight.sh
-../../scripts/collect-evidence.sh dns baseline
+bash ../../scripts/preflight.sh  # 可选：含交互式节点调试
+bash ../../scripts/collect-evidence.sh dns baseline
 
 # 在隔离实验环境中按场景 README 注入故障，记录实际操作
-../../scripts/collect-evidence.sh dns fault
+bash ../../scripts/collect-evidence.sh dns fault
 
 # 执行场景恢复动作，并人工验证 DNS/业务请求
-../../scripts/collect-evidence.sh dns recovery
-../../scripts/verify-recovery.sh dns
+bash ../../scripts/collect-evidence.sh dns recovery
+bash ../../scripts/verify-recovery.sh dns
 
 # 回到仓库根目录时检查 evidence/<RUN_ID>/
 ~~~
