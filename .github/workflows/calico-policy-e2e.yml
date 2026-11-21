@@ -31,7 +31,7 @@ jobs:
         with:
           cluster_name: sre-policy-lab
           config: environments/kind/calico.yaml
-          wait: 120s
+          wait: 0s # CNI disabled: nodes become Ready only after Calico is installed
       - name: Install Calico Operator (pinned upstream commit)
         run: |
           set -euo pipefail
