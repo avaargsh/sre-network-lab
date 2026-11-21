@@ -110,6 +110,10 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 
 除了离线 mock 契约测试，现提供 [Kind E2E 工作流](docs/kind-integration.md)，在 GitHub-hosted 的一次性 Kind 集群中运行 LAB-01/02 的 baseline → fault → recovery。该工作流与离线 CI 分开，结果必须以具体 Actions run 的结论和 `evidence` 附件为准，**不能把未运行或失败的工作流写成 E3 已验证**。
 
+## 已验证的 Kind 实验
+
+- [2026-11-21 Kind E2E 验收记录](docs/verification/2026-11-21-kind-e2e.md)：LAB-01 / LAB-02 六个阶段 PASS，证据与限制独立记录。
+
 ## 六个场景
 
 | 场景 | 内容 | 最低可接受证据 |
