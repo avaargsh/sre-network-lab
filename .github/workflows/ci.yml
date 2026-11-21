@@ -10,6 +10,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check shell syntax
         run: bash -n scripts/*.sh
+      - name: Check Vagrantfile Ruby syntax
+        run: |
+          ruby -c environments/vm/Vagrantfile
+          ruby tests/check_vm_vagrant.rb
+      - name: Python VM guest and controller syntax
+        run: python3 -m py_compile environments/vm/*.py
       - name: Verify JSON helper available
         run: jq --version
       - name: Test mocked control paths (no cluster)
