@@ -1,7 +1,8 @@
-# LAB-03D: three *independent* VirtualBox guests on two isolated internal networks.
-# Do not use --provider other than virtualbox; this is NOT a production Vagrantfile.
+# LAB-03D: three distinct VirtualBox guests on TWO disconnected Internal Networks.
+# Use only 'vagrant up --provider=virtualbox' in an isolated lab hypervisor.
 Vagrant.configure("2") do |config|
   config.vm.box = ENV.fetch("SRE_LAB_BOX", "bento/ubuntu-24.04")
+  config.vm.box_version = ENV["SRE_LAB_BOX_VERSION"] if ENV["SRE_LAB_BOX_VERSION"]
   config.vm.synced_folder ".", "/vagrant", disabled: true
   config.vm.synced_folder "../..", "/vagrant", type: "virtualbox"
 
@@ -25,41 +26,42 @@ Vagrant.configure("2") do |config|
         vb.memory = 1024
         vb.cpus = 1
       end
-      vm.vm.provision "shell", inline: <<-SHELL
-        set -eu
-        apt-get update -qq
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iproute2 python3
-        install -d -m 755 /etc/sre-network-lab
-        printf '%s\n' '{"lab":"sre-lab03d-vbox-intnet","role":"#{role}","network":"virtualbox-internal"}' \
-          > /etc/sre-network-lab/role.json
-        chmod 644 /etc/sre-network-lab/role.json
-        if [ "#{role}" = "src" ]; then
-          iface=$(ip -o -4 addr show | awk '$4 == "10.209.10.2/24" {print $2}')
-          test -n "$iface"
-          ip route replace 10.209.20.0/24 via 10.209.10.1 dev "$iface"
-        elif [ "#{role}" = "dst" ]; then
-          iface=$(ip -o -4 addr show | awk '$4 == "10.209.20.2/24" {print $2}')
-          test -n "$iface"
-          ip route replace 10.209.10.0/24 via 10.209.20.1 dev "$iface"
-          cat > /etc/systemd/system/sre-lab03d-http.service <<'SERVICE'
-[Unit]
-Description=SRE LAB-03D isolated synthetic HTTP service
-After=network-online.target
-Wants=network-online.target
-[Service]
-Type=simple
-ExecStart=/usr/bin/python3 /vagrant/environments/vm/http_vm.py serve
-Restart=on-failure
-RestartSec=2
-[Install]
-WantedBy=multi-user.target
-SERVICE
-          systemctl daemon-reload
-          systemctl enable --now sre-lab03d-http.service
-        else
-          printf '%s\n' 'net.ipv4.ip_forward=1' > /etc/sysctl.d/90-sre-lab03d.conf
-          sysctl -w net.ipv4.ip_forward=1
-        fi
+      # Squiggly heredoc strips uniform Ruby indentation so the inner
+      # shell SERVICE heredoc delimiter starts at column zero.
+      vm.vm.provision "shell", inline: <<~SHELL
+          set -eu
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iproute2 python3
+          install -d -m 755 /etc/sre-network-lab
+          printf '%s\\n' '{"lab":"sre-lab03d-vbox-intnet","role":"#{role}","network":"virtualbox-internal"}' > /etc/sre-network-lab/role.json
+          chmod 644 /etc/sre-network-lab/role.json
+          if [ "#{role}" = "src" ]; then
+            iface=$(ip -o -4 addr show | awk '$4 == "10.209.10.2/24" {print $2}')
+            test -n "$iface"
+            ip route replace 10.209.20.0/24 via 10.209.10.1 dev "$iface"
+          elif [ "#{role}" = "dst" ]; then
+            iface=$(ip -o -4 addr show | awk '$4 == "10.209.20.2/24" {print $2}')
+            test -n "$iface"
+            ip route replace 10.209.10.0/24 via 10.209.20.1 dev "$iface"
+            cat > /etc/systemd/system/sre-lab03d-http.service <<'SERVICE'
+          [Unit]
+          Description=SRE LAB-03D isolated synthetic HTTP service
+          After=network-online.target
+          Wants=network-online.target
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/python3 /vagrant/environments/vm/http_vm.py serve
+          Restart=on-failure
+          RestartSec=2
+          [Install]
+          WantedBy=multi-user.target
+          SERVICE
+            systemctl daemon-reload
+            systemctl enable --now sre-lab03d-http.service
+          else
+            printf '%s\\n' 'net.ipv4.ip_forward=1' > /etc/sysctl.d/90-sre-lab03d.conf
+            sysctl -w net.ipv4.ip_forward=1
+          fi
       SHELL
     end
   end
