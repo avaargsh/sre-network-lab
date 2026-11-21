@@ -148,8 +148,11 @@ def start(role: str, run_id: str, interfaces: dict[str, str]) -> dict:
             name = unit_name(run_id, side)
             if active(name):
                 raise ValueError("capture service already active")
-            cmd(*capture_command(run_id, side, dev))
+            # The launch response can time out after systemd has already
+            # created the transient service. Register ownership first so a
+            # failed or ambiguous launch always attempts cleanup.
             started.append(side)
+            cmd(*capture_command(run_id, side, dev))
             for _ in range(10):
                 if active(name):
                     break
