@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 import socket
 import struct
+import tempfile
 import sys
 import unittest
 from unittest import mock
@@ -65,6 +66,23 @@ class CaptureSafety(unittest.TestCase):
         for r in ("../etc","a;b","", "foo bar","A"*40):
             with self.assertRaises(ValueError):
                 p.validate_run_id(r)
+
+    def test_start_timeout_also_stops_uncertain_capture_service(self):
+        with tempfile.TemporaryDirectory() as temp:
+            calls=[]
+            def fakecmd(*args, **kwargs):
+                calls.append(args)
+                if args[0] == "systemd-run":
+                    raise RuntimeError("startup response lost")
+                return mock.Mock(returncode=0)
+            with (mock.patch.object(p, "capture_path",
+                                    return_value=Path(temp) / "unused.pcap"),
+                  mock.patch.object(p, "active", return_value=False),
+                  mock.patch.object(p, "cmd", side_effect=fakecmd)):
+                with self.assertRaises(RuntimeError):
+                    p.start("src","safe-run01",{"src":"enp0s8"})
+            self.assertEqual([c[0] for c in calls],["systemd-run","systemctl"])
+            self.assertIn("stop",calls[1])
 
     def test_bounded_export_refuses_empty_oversized(self):
         with self.assertRaises(ValueError):
