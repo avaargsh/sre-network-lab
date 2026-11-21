@@ -26,6 +26,13 @@ class PMTUContractTests(unittest.TestCase):
     def test_names_are_reserved(self):
         self.assertEqual(lab.NAMES, ("sre-pmtu-src", "sre-pmtu-hop", "sre-pmtu-dst"))
 
+    def test_discovery_allows_empty_egress_pcap_header_only(self):
+        self.assertTrue(lab.valid_pcap_size("discovery", "egress", 24))
+        self.assertFalse(lab.valid_pcap_size("discovery", "egress", 23))
+        self.assertFalse(lab.valid_pcap_size("blackhole", "egress", 24))
+        self.assertFalse(lab.valid_pcap_size("discovery", "ingress", 24))
+        self.assertTrue(lab.valid_pcap_size("discovery", "ingress", 150))
+
     def test_large_packet_matching_is_exact(self):
         self.assertTrue(lab.has_echo(BIG, 1400))
         self.assertTrue(lab.has_echo(SMALL, 900))

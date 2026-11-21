@@ -32,6 +32,14 @@ def require_approval(ack: str, scope: str, uid: int) -> None:
         raise ValueError("requires root and explicit SRE_LAB_ALLOW_MUTATIONS=1 / SRE_LAB_SCOPE=dedicated-netns")
 
 
+def valid_pcap_size(phase: str, side: str, size: int) -> bool:
+    # A pcap containing only its 24-byte global header is meaningful on the
+    # router egress during discovery: no DF-large packets may pass the bottleneck.
+    if phase == "discovery" and side == "egress":
+        return size >= 24
+    return size >= 40
+
+
 def has_echo(decoded: str, data_bytes: int) -> bool:
     """Match actual src→dst ICMP Echo Request and length in the same decoded line."""
     expected_icmp_length = data_bytes + 8
@@ -207,8 +215,8 @@ class NetnsFixture:
         decoded = {}
         for name in ("ingress", "egress"):
             file = folder / f"{name}.pcap"
-            if file.stat().st_size < 40:
-                raise RuntimeError(f"empty {name} pcap")
+            if not valid_pcap_size(phase, name, file.stat().st_size):
+                raise RuntimeError(f"{phase}: unexpected empty/truncated {name} pcap")
             data = command("tcpdump", "-tt", "-nn", "-vv", "-r", str(file)).stdout
             (folder / f"{name}.decoded.txt").write_text(data)
             decoded[name] = data

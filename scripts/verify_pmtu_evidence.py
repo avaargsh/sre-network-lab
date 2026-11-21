@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import sys
 
-from lab_pmtu import check_phase
+from lab_pmtu import check_phase, valid_pcap_size
 
 PHASES = ("baseline", "blackhole", "discovery", "recovery")
 
@@ -58,9 +58,9 @@ def verify(root: Path) -> dict:
         ingress = (folder / "ingress.decoded.txt").read_text()
         egress = (folder / "egress.decoded.txt").read_text()
         check_phase(phase, pings, ingress, egress)
-        if min((folder / "ingress.pcap").stat().st_size,
-               (folder / "egress.pcap").stat().st_size) < 40:
-            raise ValueError(f"{phase}: empty pcap")
+        for side in ("ingress", "egress"):
+            if not valid_pcap_size(phase, side, (folder / f"{side}.pcap").stat().st_size):
+                raise ValueError(f"{phase}: empty/truncated {side} pcap")
         phases[phase] = {"status": "PASS", "files_hashed": verify_hashes(folder)}
         hashes += phases[phase]["files_hashed"]
     return {"status": "PASS", "scope": env["scope"],
