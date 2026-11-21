@@ -6,7 +6,7 @@
 
 | 场景 | 建议注入方式 | 必须收集的反证和恢复证据 |
 | --- | --- | --- |
-| LAB-01 DNS | 独立命名空间内 DNS 请求限制 / 错误解析配置 | PodIP/ClusterIP 对照、dig、CoreDNS/策略状态 |
+| LAB-01 DNS | 专用客户端配置错误的 nameserver 127.0.0.1 | PodIP/ClusterIP 对照、dig、CoreDNS/策略状态 |
 | LAB-02 Service | 实验 Service 的错误 targetPort / selector | PodIP vs VIP、EndpointSlice Ready、修复访问 |
 | LAB-03 MTU | 独立 VM 上受控降低路径 MTU | 小包/大包、两端 tcpdump、修复验证 |
 | LAB-04 NetworkPolicy | 只对实验 Pod 施加拒绝策略 | 策略选择器、入口/出口请求矩阵、拒绝事件 |
@@ -17,25 +17,24 @@
 
 ## 2. 运行记录：同一个 Run ID 贯穿三个阶段
 
-当前仓库的采集脚本使用**相对当前工作目录的 `../../evidence`**，因此以下命令必须从具体场景目录执行；`RUN_ID` 必须固定，不能各阶段使用默认时间戳。
+采集脚本已使用仓库根目录定位 `evidence/<RUN_ID>`，**与调用者当前目录无关**。以下命令从仓库根目录运行；必须固定 RUN_ID，才能将三个阶段关联为同一次实验。
 
 ~~~bash
-cd scenarios/dns
-export RUN_ID="lab01-$(date +%Y%m%d-%H%M%S)"
-bash ../../scripts/preflight.sh  # 可选：含交互式节点调试
-bash ../../scripts/collect-evidence.sh dns baseline
-
-# 在隔离实验环境中按场景 README 注入故障，记录实际操作
-bash ../../scripts/collect-evidence.sh dns fault
-
-# 执行场景恢复动作，并人工验证 DNS/业务请求
-bash ../../scripts/collect-evidence.sh dns recovery
-bash ../../scripts/verify-recovery.sh dns
+export RUN_ID="lab01-$(date -u +%Y%m%dT%H%M%SZ)"
+export SRE_LAB_ALLOW_MUTATIONS=1  # 明确确认当前连接为隔离集群
+scripts/lab-dns.sh setup
+scripts/collect-evidence.sh dns baseline
+scripts/lab-dns.sh inject
+scripts/collect-evidence.sh dns fault
+scripts/lab-dns.sh restore
+scripts/verify-recovery.sh dns
+scripts/collect-evidence.sh dns recovery
+scripts/lab-dns.sh cleanup
 
 # 回到仓库根目录时检查 evidence/<RUN_ID>/
 ~~~
 
-**现有脚本限制**：`verify-recovery.sh` 对部分场景尚无完整主动验证，不能把退出码 0 解释成全部通过；`collect-evidence.sh` 并未自动生成抓包、所有版本信息或最终 RCA。需要人为补充并在报告中标记 NOT VERIFIED。日志可能包含敏感配置、地址或令牌，公开提交前先脱敏。
+**现有脚本限制**：`verify-recovery.sh` 已实现 DNS 与 Service 主动验证，其他四个场景返回 `NOT_VERIFIED`（非零）；`collect-evidence.sh` 为 DNS/Service 保存请求 stdout/stderr、阶段状态和哈希清单，仍不自动生成抓包和最终 RCA。每次采集后都要检查状态文件，并在报告中明确未验证项。日志可能包含敏感配置、地址或令牌，公开提交前先脱敏。
 
 ## 3. 证据强度分级
 

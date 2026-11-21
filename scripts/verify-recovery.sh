@@ -1,28 +1,21 @@
 #!/usr/bin/env bash
-# verify-recovery.sh <scenario>
+# Fail closed: a successful exit must mean an actual defined check passed.
 set -euo pipefail
-
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 SCENARIO=${1:-}
-echo "=== Verify recovery for ${SCENARIO} ==="
-
 case "$SCENARIO" in
   dns)
-    echo "Testing DNS resolution..."
-    kubectl run dns-test --rm -it --image=nicolaka/netshoot --restart=Never -- nslookup kubernetes.default.svc.cluster.local || true
+    exec "$ROOT/scripts/lab-dns.sh" verify
     ;;
   service)
-    echo "Testing Service access..."
-    # 替换为实际 Service
-    # kubectl run svc-test --rm -it --image=nicolaka/netshoot --restart=Never -- curl -sv --connect-timeout 3 http://<svc>.<ns>.svc.cluster.local
-    echo "TODO: replace with actual Service endpoint"
+    exec "$ROOT/scripts/lab-service.sh" verify
     ;;
-  network-policy)
-    echo "Checking if policy is removed or allows traffic..."
-    kubectl get networkpolicy -A
+  mtu|network-policy|envoy-503|istio-mtls)
+    echo "NOT_VERIFIED: no automated recovery assertion is implemented for $SCENARIO" >&2
+    exit 3
     ;;
   *)
-    echo "No specific verification defined for ${SCENARIO}"
+    echo "Usage: $0 <service|dns|mtu|network-policy|envoy-503|istio-mtls>" >&2
+    exit 2
     ;;
 esac
-
-echo "=== Recovery verification done ==="

@@ -1,0 +1,77 @@
+name: Kind integration - DNS and Service
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/kind-e2e.yml'
+      - 'scripts/**'
+      - 'scenarios/dns/**'
+      - 'scenarios/service/**'
+      - 'environments/kind/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kind-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SRE_LAB_ALLOW_MUTATIONS: "1"
+      EVIDENCE_DIR: /tmp/sre-network-evidence
+      LAB_ATTEMPTS: "15"
+      LAB_RETRY_DELAY: "2"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Provision disposable Kind cluster
+        uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
+        with:
+          cluster_name: sre-network-lab
+          config: environments/kind/cluster.yaml
+          wait: 120s
+      - name: Wait for nodes and DNS
+        run: |
+          set -euo pipefail
+          kubectl config current-context
+          kubectl wait --for=condition=Ready node --all --timeout=180s
+          kubectl -n kube-system rollout status deployment/coredns --timeout=180s
+          kubectl get nodes -o wide
+      - name: Run LAB-01 DNS baseline-fault-recovery
+        run: |
+          set -euo pipefail
+          export RUN_ID="dns-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          trap 'scripts/lab-dns.sh restore >/dev/null 2>&1 || true; scripts/lab-dns.sh cleanup || true' EXIT
+          scripts/lab-dns.sh setup
+          scripts/collect-evidence.sh dns baseline
+          scripts/lab-dns.sh inject
+          scripts/collect-evidence.sh dns fault
+          scripts/lab-dns.sh restore
+          scripts/verify-recovery.sh dns
+          scripts/collect-evidence.sh dns recovery
+      - name: Run LAB-02 Service baseline-fault-recovery
+        run: |
+          set -euo pipefail
+          export RUN_ID="service-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          trap 'scripts/lab-service.sh restore >/dev/null 2>&1 || true; scripts/lab-service.sh cleanup || true' EXIT
+          scripts/lab-service.sh setup
+          scripts/collect-evidence.sh service baseline
+          scripts/lab-service.sh inject
+          scripts/collect-evidence.sh service fault
+          scripts/lab-service.sh restore
+          scripts/verify-recovery.sh service
+          scripts/collect-evidence.sh service recovery
+      - name: Collect troubleshooting state on failure
+        if: failure()
+        run: |
+          kubectl get pods -A -o wide || true
+          kubectl -n sre-lab-dns describe deployments,pods,svc || true
+          kubectl -n sre-lab-service describe deployments,pods,svc || true
+      - name: Upload evidence from disposable test cluster
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kind-network-evidence
+          path: /tmp/sre-network-evidence/
+          retention-days: 7
+          if-no-files-found: warn
