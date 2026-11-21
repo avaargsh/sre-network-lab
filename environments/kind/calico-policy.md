@@ -30,7 +30,7 @@ kubectl apply -f environments/kind/calico-installation.yaml
 
 kubectl -n calico-system rollout status daemonset/calico-node --timeout=480s
 kubectl wait --for=condition=Ready node --all --timeout=240s
-kubectl get ippools.crd.projectcalico.org -o yaml
+kubectl get ippools.projectcalico.org -o yaml
 ~~~
 
 **真实验收**：需确认三个节点 Ready、calico-node 正常、IPPool VXLAN 模式与安装对象一致。安装失败时禁止继续策略实验；在生产机器上不允许随意卸载或重新安装集群网络。

@@ -76,7 +76,7 @@ case "$SCENARIO" in
     ;;
   network-policy)
     capture policies kubectl -n sre-lab-policy get networkpolicy -o yaml
-    capture calico-ippools kubectl get ippools.crd.projectcalico.org -o yaml
+    capture calico-ippools kubectl get ippools.projectcalico.org -o yaml
     capture calico-operator kubectl get installation.operator.tigera.io default -o yaml
     capture calico-nodes kubectl -n calico-system get pods -o wide
     if [[ "$PHASE" == recovery ]]; then action=verify; else action=$PHASE; fi

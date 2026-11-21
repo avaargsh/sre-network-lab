@@ -59,7 +59,7 @@ jobs:
           kubectl -n calico-system rollout status daemonset/calico-node --timeout=480s
           kubectl wait --for=condition=Ready node --all --timeout=240s
           kubectl -n kube-system rollout status deployment/coredns --timeout=240s
-          kubectl get ippools.crd.projectcalico.org -o yaml
+          kubectl get ippools.projectcalico.org -o yaml
           kubectl -n calico-system get pods -o wide
       - name: LAB-04 ingress egress and additive policy matrix
         run: |
