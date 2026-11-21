@@ -114,6 +114,12 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 
 - [2026-11-21 Kind E2E 验收记录](docs/verification/2026-11-21-kind-e2e.md)：LAB-01 / LAB-02 六个阶段 PASS，证据与限制独立记录。
 
+## LAB-04：Calico NetworkPolicy（独立测试集群）
+
+[实验脚本与五阶段策略矩阵](scenarios/network-policy/README.md) · [专用 Calico Kind 安装](environments/kind/calico-policy.md) · [真实 Calico CI Workflow](.github/workflows/calico-policy-e2e.yml)。
+
+与 LAB-01/02 的默认 Kind 环境不同：LAB-04 使用 **disableDefaultCNI: true**，安装 Calico v3.33.1 并核验 NetworkPolicy **真实执行**。在 E2E run 和证据核验完成以前保持 NOT VERIFIED。
+
 ## 六个场景
 
 | 场景 | 内容 | 最低可接受证据 |
@@ -132,4 +138,4 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 - 公开 evidence 前务必检查日志、地址、令牌及可能包含的敏感配置。
 - 所有命令输出随 Kubernetes、Linux 内核、CNI、Service Proxy 版本和模式变化，应记录实际版本。
 
-本仓库目前定位为 **学习材料 + LAB-01/02 可执行脚本 + 离线契约测试**，不是经过真实集群全面验收的网络故障平台。
+本仓库目前定位为 **学习材料 + LAB-01/02 已实跑集成测试 + LAB-04 可执行 Calico 策略实验（须单独验收）**，不是经过真实集群全面验收的网络故障平台。

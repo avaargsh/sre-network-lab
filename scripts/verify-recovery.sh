@@ -10,7 +10,10 @@ case "$SCENARIO" in
   service)
     exec "$ROOT/scripts/lab-service.sh" verify
     ;;
-  mtu|network-policy|envoy-503|istio-mtls)
+  network-policy)
+    exec "$ROOT/scripts/lab-policy.sh" verify
+    ;;
+  mtu|envoy-503|istio-mtls)
     echo "NOT_VERIFIED: no automated recovery assertion is implemented for $SCENARIO" >&2
     exit 3
     ;;
