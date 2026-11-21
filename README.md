@@ -118,7 +118,7 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 
 [实验脚本与五阶段策略矩阵](scenarios/network-policy/README.md) · [专用 Calico Kind 安装](environments/kind/calico-policy.md) · [真实 Calico CI Workflow](.github/workflows/calico-policy-e2e.yml)。
 
-与 LAB-01/02 的默认 Kind 环境不同：LAB-04 使用 **disableDefaultCNI: true**，安装 Calico v3.33.1 并核验 NetworkPolicy **真实执行**。在 E2E run 和证据核验完成以前保持 NOT VERIFIED。
+与 LAB-01/02 的默认 Kind 环境不同：LAB-04 使用 **disableDefaultCNI: true**，安装 Calico v3.33.1 并核验 NetworkPolicy **真实执行**。LAB-04 已在三节点 Kind + Calico v3.33.1 下完成真实五阶段验收（应用 Pod 全部位于同一 Worker）；详见 [2026-11-21 验收报告](docs/verification/2026-11-21-calico-policy-e2e.md)。**这不代表跨节点 VXLAN / 物理 MTU 已验证。**
 
 ## 六个场景
 
