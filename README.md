@@ -106,6 +106,10 @@ python3 -m unittest discover -s tests -v
 
 GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 Kubernetes E2E**。
 
+## 隔离 Kind 端到端验证
+
+除了离线 mock 契约测试，现提供 [Kind E2E 工作流](docs/kind-integration.md)，在 GitHub-hosted 的一次性 Kind 集群中运行 LAB-01/02 的 baseline → fault → recovery。该工作流与离线 CI 分开，结果必须以具体 Actions run 的结论和 `evidence` 附件为准，**不能把未运行或失败的工作流写成 E3 已验证**。
+
 ## 六个场景
 
 | 场景 | 内容 | 最低可接受证据 |
