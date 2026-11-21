@@ -20,3 +20,9 @@ The workflow is not proof of cross-node traffic forwarding or Overlay/Underlay b
 5. If the workflow fails, inspect the pod descriptions and `lab-probe.err` from the uploaded artifact, fix the root cause, and rerun; do not claim GREEN prematurely.
 
 **CI artifacts may include IPs and cluster configuration.** Only use synthetic disposable resources in this workflow; never auto-upload evidence collected from a real production cluster.
+
+## 真实 Kind 失败复盘（首次 E2E）
+
+首次 hosted Kind（Kubernetes v1.37.0）中，故障注入阶段成功，但恢复后对 DNS 的检测仍使用 localhost `127.0.0.1`。原因是旧版脚本从 Pod 列表固定选取 `.items[0]`：滚动更新完成时，旧 Pod 可能仍在终止期。修复后改为从 Kubernetes Pod JSON 中过滤 `deletionTimestamp == null`、`phase == Running`、`Ready == True`，并加入旧/新 Pod 同时存在的回归测试。
+
+复盘的证据边界：此前运行并非 GREEN，修复是否有效须以**后续新 run** 的 Kind 阶段状态及请求证据确认。

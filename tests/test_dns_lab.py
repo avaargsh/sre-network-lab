@@ -17,8 +17,14 @@ if a[:2]==['-n','sre-lab-dns']:a=a[2:]
 def out(t):print(t,end='');sys.exit(0)
 if a[:1]==['cluster-info']:out('cluster ok')
 if a[:2]==['get','deployment'] and 'jsonpath=' in ' '.join(a):out(s['policy'])
+if a[:2]==['get','pods'] and 'app=lab-dns-probe' in a and 'json' in a:
+ new={'metadata':{'name':'dns-client-new'},'status':{'phase':'Running','conditions':[{'type':'Ready','status':'True'}]}}
+ pods=[new]
+ if os.environ.get('DNS_MOCK_OLD_POD')=='1':
+  old={'metadata':{'name':'dns-client-old','deletionTimestamp':'2026-11-21T03:00:00Z'},'status':{'phase':'Running','conditions':[{'type':'Ready','status':'True'}]}}
+  pods=[old,new]
+ out(json.dumps({'items':pods}))
 if a[:2]==['get','pod']:
- if 'app=lab-dns-probe' in a:out('dns-client')
  if 'app=lab-dns-echo' in a:out('10.41.0.12')
 if a[:2]==['get','svc'] and 'jsonpath=' in ' '.join(a):out('10.96.0.35')
 if a[:2]==['patch','deployment']:
@@ -88,6 +94,12 @@ class DnsLabTests(unittest.TestCase):
         self.run_script('lab-dns.sh','inject')
         self.run_script('lab-dns.sh','inject',ok=False)
         self.run_script('lab-dns.sh','baseline',ok=False)
+
+    def test_rollout_ignores_terminating_pod(self):
+        self.run_script('lab-dns.sh','inject')
+        self.run_script('lab-dns.sh','fault',overrides={'DNS_MOCK_OLD_POD':'1'})
+        self.assertIn('exec dns-client-new --', self.log.read_text())
+        self.assertNotIn('exec dns-client-old --', self.log.read_text())
 
     def test_dns_failure_not_confused_with_other_network_errors(self):
         self.run_script('lab-dns.sh','inject')

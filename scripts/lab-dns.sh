@@ -12,9 +12,21 @@ DELAY=$(printenv LAB_RETRY_DELAY || printf '2')
 [[ "$ATTEMPTS" =~ ^[1-9][0-9]*$ && "$DELAY" =~ ^[0-9]+$ ]] || { echo 'Invalid retry configuration' >&2; exit 2; }
 
 usage() { echo "Usage: $0 {setup|baseline|inject|fault|restore|verify|cleanup}" >&2; exit 2; }
-need() { command -v kubectl >/dev/null || { echo 'kubectl required' >&2; exit 1; }; }
+need() {
+  command -v kubectl >/dev/null || { echo 'kubectl required' >&2; exit 1; }
+  command -v jq >/dev/null || { echo 'jq required to select the live Ready Pod' >&2; exit 1; }
+}
 dns_policy() { kubectl -n "$NS" get deployment "$DEPLOY" -o jsonpath='{.spec.template.spec.dnsPolicy}'; }
-probe_pod() { kubectl -n "$NS" get pod -l app=lab-dns-probe -o jsonpath='{.items[0].metadata.name}'; }
+probe_pod() {
+  # During Deployment rollout, an old Pod may still be Terminating even after
+  # rollout status reports success. Never blindly select .items[0].
+  kubectl -n "$NS" get pods -l app=lab-dns-probe -o json | jq -r '
+    [.items[]
+      | select(.metadata.deletionTimestamp == null)
+      | select(.status.phase == "Running")
+      | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))
+      | .metadata.name] | last // empty'
+}
 backend_ip() { kubectl -n "$NS" get pod -l app=lab-dns-echo -o jsonpath='{.items[0].status.podIP}'; }
 service_ip() { kubectl -n "$NS" get svc lab-dns-echo -o jsonpath='{.spec.clusterIP}'; }
 prepare() {
