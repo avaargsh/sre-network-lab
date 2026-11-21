@@ -138,6 +138,12 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 
 已在单个隔离 Linux Runner 上，完成真实 64KiB HTTP POST 的正常→黑洞→MSS 缓解→恢复，并通过双端 PCAP 观察 TCP 重传、SYNACK MSS 与数据段大小变化。**未在两台独立 VM 或生产网络验收。**
 
+## LAB-03D Stage 2A · 90 秒 MTU 租约和自动回滚（待真实三 VM 验收）
+
+[Router watchdog/恢复手册](environments/vm/lab03d.md) · [Root Helper](environments/vm/router_fault.py) · [Host 控制器](environments/vm/vm_mtu_drill.py) · [独立证据校验](environments/vm/verify_vm_fault.py)。
+
+已加入先安装并确认 systemd 定时回滚、再修改实验 Router 私网接口 MTU 的受控逻辑，以及 HTTP 恢复与哈希门禁；**尚无三 VM E2E、PCAP 或跨机黑洞实测。**
+
 ## LAB-03D · 三独立 VirtualBox VM Underlay 拓扑门禁（待实测）
 
 [启动与验证手册](environments/vm/lab03d.md) · [Vagrant VM 定义](environments/vm/Vagrantfile) · [跨机验收控制器](environments/vm/lab_vm.py) · [独立证据校验器](environments/vm/verify_vm_evidence.py)。
