@@ -238,6 +238,8 @@ def main():
                           "run_id": run_id, "interface": dev,
                           "mtu": current_mtu(dev),
                           "timer_active": timer_active(run_id)}
+                if state:
+                    result["deadline_epoch"] = state["deadline_epoch"]
         print(PREFIX + json.dumps(result, sort_keys=True))
         return 0
     except (OSError, ValueError, RuntimeError, KeyError,
