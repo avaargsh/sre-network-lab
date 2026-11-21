@@ -17,9 +17,11 @@ probe_pod() { kubectl -n "$NS" get pod -l app=lab-probe -o jsonpath='{.items[0].
 echo_ip() { kubectl -n "$NS" get pod -l app=lab-echo -o jsonpath='{.items[0].status.podIP}'; }
 service_ip() { kubectl -n "$NS" get svc lab-echo -o jsonpath='{.spec.clusterIP}'; }
 request() {
-  local url=$1 output
-  output=$(kubectl -n "$NS" exec "$CLIENT" -- curl -fsS --connect-timeout 2 --max-time 5 "$url") || return 1
-  [[ "$output" == *"$EXPECTED"* ]]
+  local url=$1 output rc=0
+  if output=$(kubectl -n "$NS" exec "$CLIENT" -- curl --noproxy '*' -fsS --connect-timeout 2 --max-time 5 "$url" 2>&1); then rc=0; else rc=$?; fi
+  printf 'URL=%q RC=%d OUTPUT=%q\n' "$url" "$rc" "$output" >&2
+  if ((rc != 0)); then return "$rc"; fi
+  [[ "$output" == *"$EXPECTED"* ]] || return 90
 }
 prepare() {
   CLIENT=$(probe_pod)
@@ -33,7 +35,12 @@ check() {
     if request "$url"; then
       if [[ "$want" == ok ]]; then echo "PASS $kind: success"; return 0; fi
     else
-      if [[ "$want" == fail ]]; then echo "PASS $kind: expected failure"; return 0; fi
+      local rc=$?
+      # Only genuine TCP connect failure or timeout meets the wrong-targetPort case;
+      # DNS resolution error (curl 6) and HTTP errors must NOT be accepted.
+      if [[ "$want" == fail && ( "$rc" -eq 7 || "$rc" -eq 28 ) ]]; then
+        echo "PASS $kind: expected failure curl_rc=$rc"; return 0
+      fi
     fi
     sleep "$RETRY_DELAY"
   done

@@ -33,7 +33,7 @@ scripts/lab-service.sh cleanup
 
 注入动作：将 Service 的 `targetPort: http`（容器监听 5678）更改成 `5679`，后端 Pod、readiness 与 EndpointSlice 地址集合保持不变。`fault` 同时用 `http://PodIP:5678/`、`http://ClusterIP:80/`、Service DNS 做对照；`verify` 要求三者都恢复成功。
 
-通过标准：baseline 三项成功，fault 阶段 PodIP 成功且 VIP/DNS 请求失败，restore 后三项成功；证据中包含 `Service` 配置、EndpointSlice 和各阶段命令结果。注意当前采集器**不自动保存上述 curl 输出**，建议手动重放并保存同一请求时间窗的证据，不能凭脚本退出码声称已完成完整 E3 证据链。
+通过标准：baseline 三项成功，fault 阶段 PodIP 成功且 VIP/DNS 请求失败，restore 后三项成功；证据中包含 `Service` 配置、EndpointSlice 和各阶段命令结果。当前采集器会运行对应阶段的探测脚本，将结果写入 `lab-probe.out/.err`，并生成 `phase-status.json`、`command-status.tsv` 与 `SHA256SUMS`；探测失败会使采集器非零退出。真实抓包与完整 RCA 仍需人工补足，不能仅凭离线 CI 声称 E3 实测通过。
 
 失败时不要执行 `cleanup` 之前的自动集群级修复。若在注入后中断，先运行 `scripts/lab-service.sh restore`，再 `verify`；若 Service 的 targetPort 已被其他人修改，脚本会拒绝覆盖，需人工确认。
 

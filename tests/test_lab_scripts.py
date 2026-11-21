@@ -28,7 +28,7 @@ if a[:1]==['exec']:
  url=a[-1]
  ok='10.42.0.10:5678' in url or (state['port']=='http' and ':80/' in url)
  if ok:print('sre-network-lab-ok');sys.exit(0)
- print('curl: (7) connection refused',file=sys.stderr);sys.exit(7)
+ print('curl: connection refused',file=sys.stderr);sys.exit(int(os.environ.get('MOCK_SERVICE_FAILURE_RC','7')))
 if a[:2]==['patch','svc']:
  val=json.loads(a[-1].removeprefix('-p='))[0]['value'];state['port']=str(val)
  state_path.write_text(json.dumps(state));print('patched');sys.exit(0)
@@ -104,14 +104,22 @@ class ScriptTests(unittest.TestCase):
         self.script('lab-service.sh','baseline',ok=False)
         self.script('verify-recovery.sh','dns',ok=False)
 
+    def test_service_fault_rejects_dns_errors_as_wrong_port(self):
+        self.script('lab-service.sh','inject')
+        self.script('lab-service.sh','fault',ok=False,MOCK_SERVICE_FAILURE_RC='6')
+        self.script('lab-service.sh','fault')
+
     def test_evidence_id_and_stable_location(self):
         p=self.script('collect-evidence.sh','service','baseline',RUN_ID='test-01',EVIDENCE_DIR=str(self.d/'evidence'))
         self.assertIn('RUN_ID: test-01',p.stdout)
         e=self.d/'evidence'/'test-01'
         self.assertTrue((e/'environment.json').exists())
         self.assertTrue((e/'baseline'/'command-status.tsv').exists())
+        self.state.write_text('{"port":"5679"}')
         self.script('collect-evidence.sh','service','fault',RUN_ID='test-01',EVIDENCE_DIR=str(self.d/'evidence'))
         self.assertTrue((e/'fault'/'services.out').exists())
+        self.assertIn('PASS cluster-ip: expected failure', (e/'fault'/'lab-probe.out').read_text())
+        self.assertTrue((e/'fault'/'SHA256SUMS').exists())
         self.script('collect-evidence.sh','service','recovery',ok=False,EVIDENCE_DIR=str(self.d/'evidence'))
         self.script('collect-evidence.sh','service','baseline',ok=False,RUN_ID='../escaped',EVIDENCE_DIR=str(self.d/'evidence'))
 

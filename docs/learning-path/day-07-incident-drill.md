@@ -6,7 +6,7 @@
 
 | 场景 | 建议注入方式 | 必须收集的反证和恢复证据 |
 | --- | --- | --- |
-| LAB-01 DNS | 独立命名空间内 DNS 请求限制 / 错误解析配置 | PodIP/ClusterIP 对照、dig、CoreDNS/策略状态 |
+| LAB-01 DNS | 专用客户端配置错误的 nameserver 127.0.0.1 | PodIP/ClusterIP 对照、dig、CoreDNS/策略状态 |
 | LAB-02 Service | 实验 Service 的错误 targetPort / selector | PodIP vs VIP、EndpointSlice Ready、修复访问 |
 | LAB-03 MTU | 独立 VM 上受控降低路径 MTU | 小包/大包、两端 tcpdump、修复验证 |
 | LAB-04 NetworkPolicy | 只对实验 Pod 施加拒绝策略 | 策略选择器、入口/出口请求矩阵、拒绝事件 |
@@ -21,19 +21,20 @@
 
 ~~~bash
 export RUN_ID="lab01-$(date -u +%Y%m%dT%H%M%SZ)"
+export SRE_LAB_ALLOW_MUTATIONS=1  # 明确确认当前连接为隔离集群
+scripts/lab-dns.sh setup
 scripts/collect-evidence.sh dns baseline
-
-# 在隔离实验环境中按场景 README 注入故障，记录实际操作
+scripts/lab-dns.sh inject
 scripts/collect-evidence.sh dns fault
-
-# 执行场景恢复动作，并人工验证 DNS/业务请求
+scripts/lab-dns.sh restore
+scripts/verify-recovery.sh dns
 scripts/collect-evidence.sh dns recovery
-scripts/verify-recovery.sh dns  # NOT_VERIFIED：预期退出码 3，尚未实现自动验收
+scripts/lab-dns.sh cleanup
 
 # 回到仓库根目录时检查 evidence/<RUN_ID>/
 ~~~
 
-**现有脚本限制**：`verify-recovery.sh` 只实现 Service 主动验证，其余场景明确返回 `NOT_VERIFIED`（非零）；`collect-evidence.sh` 将每条命令的错误码记录到 `command-status.tsv`，仍不自动生成完整抓包和 RCA。每次采集后都要检查状态文件，并在报告中明确未验证项。日志可能包含敏感配置、地址或令牌，公开提交前先脱敏。
+**现有脚本限制**：`verify-recovery.sh` 已实现 DNS 与 Service 主动验证，其他四个场景返回 `NOT_VERIFIED`（非零）；`collect-evidence.sh` 为 DNS/Service 保存请求 stdout/stderr、阶段状态和哈希清单，仍不自动生成抓包和最终 RCA。每次采集后都要检查状态文件，并在报告中明确未验证项。日志可能包含敏感配置、地址或令牌，公开提交前先脱敏。
 
 ## 3. 证据强度分级
 

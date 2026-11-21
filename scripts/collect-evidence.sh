@@ -22,14 +22,21 @@ fi
 [[ "$RUN_ID" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$ ]] || { echo 'Invalid RUN_ID' >&2; exit 2; }
 BASE="${EVIDENCE_DIR:-$ROOT/evidence}/$RUN_ID"
 OUT="$BASE/$PHASE"
+if [[ "$PHASE" != baseline ]]; then
+  [[ -f "$BASE/environment.json" ]] || { echo 'Missing baseline environment.json for RUN_ID; refusing unlinked evidence' >&2; exit 2; }
+  [[ "$(jq -r .scenario "$BASE/environment.json")" == "$SCENARIO" ]] || { echo 'RUN_ID belongs to a different scenario' >&2; exit 2; }
+fi
 mkdir -p "$OUT"
 STATUS="$OUT/command-status.tsv"
+LAST_RC=0
+PROBE_RC=3
 printf 'name\texit_code\n' > "$STATUS"
 
 capture() {
   local name=$1 rc=0; shift
   if "$@" > "$OUT/$name.out" 2> "$OUT/$name.err"; then rc=0; else rc=$?; fi
   printf '%s\t%d\n' "$name" "$rc" >> "$STATUS"
+  LAST_RC=$rc
   if ((rc != 0)); then echo "WARN $name exited $rc" >&2; fi
 }
 
@@ -44,8 +51,24 @@ capture kube-proxy kubectl -n kube-system get cm kube-proxy -o yaml
 capture cni-pods kubectl -n kube-system get pods -o wide
 
 case "$SCENARIO" in
-  dns) capture coredns-logs kubectl -n kube-system logs -l k8s-app=kube-dns --tail=100 ;;
-  service) capture service-endpoints kubectl -n sre-lab-service get endpointslices -l kubernetes.io/service-name=lab-echo -o yaml ;;
+  dns)
+    capture coredns-logs kubectl -n kube-system logs -l k8s-app=kube-dns --tail=100
+    capture dns-deployment kubectl -n sre-lab-dns get deployment lab-dns-probe -o yaml
+    if [[ "$PHASE" == baseline ]]; then action=baseline
+    elif [[ "$PHASE" == fault ]]; then action=fault
+    else action=verify; fi
+    capture lab-probe "$ROOT/scripts/lab-dns.sh" "$action"
+    PROBE_RC=$LAST_RC
+    ;;
+  service)
+    capture service-endpoints kubectl -n sre-lab-service get endpointslices -l kubernetes.io/service-name=lab-echo -o yaml
+    capture service-config kubectl -n sre-lab-service get svc lab-echo -o yaml
+    if [[ "$PHASE" == baseline ]]; then action=baseline
+    elif [[ "$PHASE" == fault ]]; then action=fault
+    else action=verify; fi
+    capture lab-probe "$ROOT/scripts/lab-service.sh" "$action"
+    PROBE_RC=$LAST_RC
+    ;;
   network-policy) capture policies kubectl get networkpolicy -A -o yaml ;;
   envoy-503|istio-mtls)
     if command -v istioctl >/dev/null; then capture proxy-status istioctl proxy-status; else echo -e 'proxy-status\t127' >> "$STATUS"; fi
@@ -67,4 +90,10 @@ if [[ "$PHASE" == baseline ]]; then
       kubelet:(.status.nodeInfo.kubeletVersion // "unknown")}],
       cni:"REQUIRES_MANUAL_CONFIRMATION", kube_proxy_mode:"REQUIRES_MANUAL_CONFIRMATION"}' > "$BASE/environment.json"
 fi
-printf 'Evidence: %s\nRUN_ID: %s\nReview before publishing. Failed optional commands are in %s\n' "$OUT" "$RUN_ID" "$STATUS"
+jq -n --arg scenario "$SCENARIO" --arg phase "$PHASE" --arg run_id "$RUN_ID" --argjson probe_rc "$PROBE_RC"   '{run_id:$run_id,scenario:$scenario,phase:$phase,probe_exit_code:$probe_rc,
+    probe_status:(if $probe_rc==0 then "PASS" elif $probe_rc==3 then "NOT_VERIFIED" else "FAILED" end)}' > "$OUT/phase-status.json"
+( cd "$OUT" && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum ) > "$OUT/SHA256SUMS"
+printf 'Evidence: %s\nRUN_ID: %s\nReview command-status.tsv and phase-status.json before publishing\n' "$OUT" "$RUN_ID"
+if [[ "$SCENARIO" == dns || "$SCENARIO" == service ]]; then
+  (( PROBE_RC == 0 )) || { echo "CRITICAL: $SCENARIO $PHASE probe failed; see lab-probe.err/out" >&2; exit 1; }
+fi

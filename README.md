@@ -22,7 +22,7 @@ Kubernetes 网络故障诊断与**证据化排查实验室**，面向 SRE / 平�
 environments/kind/   # 双 Worker Kind 配置（cluster.yaml）
 environments/vm/     # Underlay、BGP、MTU 的独立 VM 实验说明
 scenarios/           # dns / service / mtu / network-policy / envoy-503 / istio-mtls
-scripts/             # lab-netns / lab-service / preflight / collect-evidence / verify-recovery
+scripts/             # lab-netns / lab-dns / lab-service / preflight / collect-evidence / verify-recovery
 evidence/            # 报告模板与本地运行证据
 docs/learning-path/  # Day 1–7 自学手册
 ~~~
@@ -48,6 +48,21 @@ sudo scripts/lab-netns.sh verify
 sudo scripts/lab-netns.sh down
 ~~~
 
+**LAB-01：客户端 DNS 故障**（不会修改 CoreDNS）：
+
+~~~bash
+export SRE_LAB_ALLOW_MUTATIONS=1  # 确认当前为独立测试集群后再设置
+scripts/lab-dns.sh setup
+scripts/lab-dns.sh baseline
+scripts/lab-dns.sh inject
+scripts/lab-dns.sh fault
+scripts/lab-dns.sh restore
+scripts/lab-dns.sh verify
+scripts/lab-dns.sh cleanup
+~~~
+
+[LAB-01 完整复现与恢复](scenarios/dns/README.md)。
+
 **LAB-02：Service targetPort 故障**（使用独立测试 Kubernetes 集群）：
 
 ~~~bash
@@ -61,24 +76,26 @@ scripts/lab-service.sh verify
 scripts/lab-service.sh cleanup  # 删除独立实验工作负载，保留 namespace
 ~~~
 
-[详细实验步骤与风险边界](scenarios/service/README.md)。除 LAB-02 外，其他五个故障场景当前仍主要是设计说明，尚无完整自动注入与验收。Kind 默认 CNI 不强制执行 NetworkPolicy，Calico、Cilium、Istio 应在独立适配环境安装。
+[详细实验步骤与风险边界](scenarios/service/README.md)。除 LAB-01 / LAB-02 外，其他四个故障场景当前仍主要是设计说明，尚无完整自动注入与验收。Kind 默认 CNI 不强制执行 NetworkPolicy，Calico、Cilium、Istio 应在独立适配环境安装。
 
 ### 证据采集（路径修复与失败记录）
 
 证据固定写入仓库根目录 `evidence/<RUN_ID>/`（可设置 `EVIDENCE_DIR` 指向其他私人路径），**不再依赖当前工作目录**。baseline 可以自动创建 RUN_ID，但建议显式设置，fault/recovery 必须使用相同 RUN_ID：
 
 ~~~bash
+export SRE_LAB_ALLOW_MUTATIONS=1  # 仅在确认隔离测试集群后
 export RUN_ID="dns-$(date -u +%Y%m%dT%H%M%SZ)"
-scripts/collect-evidence.sh dns baseline
-# 仅在隔离实验环境注入并实际复现后，再采集 fault
-scripts/collect-evidence.sh dns fault
-# 恢复并手动验证请求，再采集 recovery
-scripts/collect-evidence.sh dns recovery
-# dns 等非 Service 场景尚未实现自动验收，非零退出为预期
+scripts/lab-dns.sh setup
+scripts/collect-evidence.sh dns baseline  # 自动验证 PodIP/VIP/FQDN
+scripts/lab-dns.sh inject
+scripts/collect-evidence.sh dns fault     # 自动判断 DNS 失败 vs 网络不通
+scripts/lab-dns.sh restore
 scripts/verify-recovery.sh dns
+scripts/collect-evidence.sh dns recovery
+scripts/lab-dns.sh cleanup
 ~~~
 
-只在 `service` 场景实现主动恢复检查；未实现的场景返回 `NOT_VERIFIED` 与非零退出。每阶段的单项采集错误写入 `command-status.tsv`，完整性需要人工核查。真实抓包、CNI/代理模式与根因仍需按 [报告模板](evidence/report-template.md) 补齐，缺失标为 NOT VERIFIED。
+已在 `dns` 和 `service` 场景实现主动请求/恢复检查；其他场景返回 `NOT_VERIFIED` 与非零退出。每阶段 `lab-probe.out/.err` 保存请求输出，`phase-status.json` 标明 PASS/FAILED，`command-status.tsv` 记录各命令退出码，`SHA256SUMS` 用于文件完整性核对。若探测失败，采集器会非零退出。真实抓包、CNI/代理模式与根因仍需按 [报告模板](evidence/report-template.md) 补齐，缺失标为 NOT VERIFIED。
 
 ## 本地自动化检查（不依赖集群）
 
@@ -107,4 +124,4 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 - 公开 evidence 前务必检查日志、地址、令牌及可能包含的敏感配置。
 - 所有命令输出随 Kubernetes、Linux 内核、CNI、Service Proxy 版本和模式变化，应记录实际版本。
 
-本仓库目前定位为 **学习材料 + 前两个实验的可执行脚本 + 离线契约测试**，不是经过真实集群全面验收的网络故障平台。
+本仓库目前定位为 **学习材料 + LAB-01/02 可执行脚本 + 离线契约测试**，不是经过真实集群全面验收的网络故障平台。
