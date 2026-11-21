@@ -138,6 +138,12 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 
 已在单个隔离 Linux Runner 上，完成真实 64KiB HTTP POST 的正常→黑洞→MSS 缓解→恢复，并通过双端 PCAP 观察 TCP 重传、SYNACK MSS 与数据段大小变化。**未在两台独立 VM 或生产网络验收。**
 
+## LAB-03D Stage 2C：精确 POST 证据与真实三 VM 手动 E2E 入口
+
+[实验验收手册](environments/vm/lab03d.md) · [专用 Runner Workflow](.github/workflows/lab03d-real-vbox.yml)。
+
+四点 PCAP 验证已从相同 TCP SYN + 任意数据，改为**相同 HTTP POST 初始序号 + 四点共享上传数据范围**，防止健康检查流量导致假阳性。新增专用 VirtualBox 自托管 Runner 上手动执行真实三 VM 验收的工作流。**当前尚无真实 VM 执行与 PCAP Artifact。**
+
 ## LAB-03D Stage 2B：三 VM 四接口 TCP PCAP 工具（待真实实测）
 
 [操作手册](environments/vm/lab03d.md) · [Guest 抓包](environments/vm/pcap_vm.py) · [Host 协调器](environments/vm/vm_pcap_baseline.py) · [独立证据验收](environments/vm/verify_vm_pcap.py)。
