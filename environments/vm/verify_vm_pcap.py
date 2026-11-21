@@ -72,10 +72,53 @@ def decode_pcap(data: bytes) -> list[dict]:
             "sport": sport, "dport": dport, "seq": seq,
             "flags": tcp[13],
             "payload_len": total_len - ihl - offset,
+            # tcpdump snaplen=160 captures the request prefix, not the
+            # complete wire segment. Keep only bounded header bytes.
+            "payload_prefix": tcp[offset:offset + min(96, total_len - ihl - offset)],
         })
     if at != len(data):
         raise ValueError("unconsumed PCAP bytes")
     return packets
+
+
+def _merge_intervals(intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    merged: list[list[int]] = []
+    for start, end in sorted(intervals):
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return [(start, end) for start, end in merged]
+
+
+def _overlap(a: list[tuple[int, int]], b: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    a, b = _merge_intervals(a), _merge_intervals(b)
+    i = j = 0
+    output = []
+    while i < len(a) and j < len(b):
+        left, right = max(a[i][0], b[j][0]), min(a[i][1], b[j][1])
+        if right > left:
+            output.append((left, right))
+        if a[i][1] < b[j][1]:
+            i += 1
+        else:
+            j += 1
+    return _merge_intervals(output)
+
+
+def _body_intervals(packets: list[dict], sport: int, post_seq: int) -> list[tuple[int, int]]:
+    result = []
+    for packet in packets:
+        if (packet["src"] != SRC or packet["dst"] != DST
+                or packet["sport"] != sport or packet["dport"] != PORT
+                or packet["payload_len"] < 512):
+            continue
+        # TCP sequence is modulo 2**32. This fixed 64-KiB lab must stay
+        # close to POST's initial sequence; distant/old flows are excluded.
+        delta = (packet["seq"] - post_seq) % (2 ** 32)
+        if 0 < delta < 66000 and delta + packet["payload_len"] <= 66000:
+            result.append((delta, delta + packet["payload_len"]))
+    return _merge_intervals(result)
 
 
 def require_four_point_flow(captures: dict[str, list[dict]]) -> dict:
@@ -83,24 +126,42 @@ def require_four_point_flow(captures: dict[str, list[dict]]) -> dict:
         raise ValueError("must have exactly four guest NIC captures")
     syn_keys = None
     for side in CAPTURES:
-        packets = captures[side]
         syns = {
-            (p["sport"], p["seq"]) for p in packets
+            (p["sport"], p["seq"]) for p in captures[side]
             if p["src"] == SRC and p["dst"] == DST and p["dport"] == PORT
             and p["flags"] & 2 and not p["flags"] & 16
         }
         syn_keys = syns if syn_keys is None else syn_keys.intersection(syns)
     if not syn_keys:
-        raise ValueError("no identical source TCP SYN is visible at all four NICs")
-    for sport, seq in sorted(syn_keys):
-        ok = all(any(
-            p["src"] == SRC and p["dst"] == DST and p["sport"] == sport
-            and p["dport"] == PORT and p["payload_len"] > 0
-            for p in captures[side]) for side in CAPTURES)
-        if ok:
-            return {"status": "PASS", "source_port": sport, "syn_sequence": seq}
-    raise ValueError("matching SYN without forwarded source TCP payload at all four NICs")
+        raise ValueError("no common source TCP SYN at all four private NICs")
 
+    post_prefix = b"POST /upload HTTP/1."
+    for sport, syn_seq in sorted(syn_keys):
+        post_seq = (syn_seq + 1) % (2 ** 32)
+        if not all(any(
+                p["src"] == SRC and p["dst"] == DST
+                and p["sport"] == sport and p["dport"] == PORT
+                and p["seq"] == post_seq
+                and p["payload_prefix"].startswith(post_prefix)
+                for p in captures[side]) for side in CAPTURES):
+            continue
+
+        common = _body_intervals(captures["src"], sport, post_seq)
+        for side in CAPTURES[1:]:
+            common = _overlap(common, _body_intervals(captures[side], sport, post_seq))
+            if not common:
+                break
+        common_body_bytes = sum(end - start for start, end in common)
+        if common_body_bytes >= 512:
+            return {
+                "status": "PASS", "source_port": sport,
+                "syn_sequence": syn_seq, "post_sequence": post_seq,
+                "common_body_bytes": common_body_bytes,
+            }
+    raise ValueError(
+        "no shared POST /upload request and >=512 forwarded TCP body bytes "
+        "at all four private NICs"
+    )
 
 def verify(root: Path, expected_digest: str = SHA256) -> dict:
     if not root.is_dir() or root.is_symlink():

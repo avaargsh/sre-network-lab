@@ -139,3 +139,27 @@ Host 控制器先验证三台 VM 的独立机器/启动身份、管理网卡隔�
 证据存放在 `evidence/<RUN_ID>`：三 VM 拓扑、HTTP JSON、四个二进制 PCAP、四接口元数据、SHA256SUMS 与状态。独立校验要求**同一个客户端 TCP SYN**（同源端口和初始 Seq）在四份文件中都能观察到，并在四处观察到该流量的数据段，同时重新验证 HTTP 和全部文件哈希。校验失败时不能留存 PASS 状态。
 
 **证据边界**：截至本次提交，没有三台真实 VirtualBox VM 的跨机 PCAP Artifact。GitHub Actions 只验证合成数据与代码逻辑。Router MTU 注入、真实三 VM 的 90 秒回滚、PMTU 黑洞和 MSS 缓解仍未完成实测，Issue #6 保持 OPEN。
+
+
+## Stage 2C：精确 HTTP POST 四点序号相关性 + 手动真实 VM 验收
+
+相比原有只检查相同 SYN 和任意 TCP 数据的机制，新独立校验器明确要求：四份原始 PCAP 必须有同一客户端 SYN 的端口与初始 Seq；四处必须观察到**同一序号的 POST /upload HTTP/1.x 请求头**；并且四处必须在该连接中观察到至少 **512 字节相互重合的上传 TCP 序号范围**，同时容许 Router 重新分段。仅有 GET /health、缺少 POST 头、POST 序号不一致或大数据不再转发，一律 NOT_VERIFIED。
+
+抓包 snaplen=160，因此只解析有限的 HTTP 请求头前缀，线上 TCP 长度取 IPv4 Total Length。校验器并不假装保存了完整 HTTP body；完整 HTTP 回执与服务器内容 SHA256 需要额外独立核对。
+
+### 专用自托管 Runner：手动真实三 VM E2E
+
+[手动真实 VM GitHub Actions 工作流](../../.github/workflows/lab03d-real-vbox.yml) 仅支持 `workflow_dispatch`，在 `main` 上手动运行，要求固定确认字符串 `I_CONFIRM_DEDICATED_VBOX_HOST`。该工作流必须由维护者配置**专用的 Linux 自托管 Runner**，标签 `sre-vbox-lab`，预安装 VirtualBox、Vagrant、Python3，并具备可启动 3 台 VM 的宿主机资源。
+
+运行 `environments/vm/run_live_e2e.sh` 之前会检查明确批准、实验 Scope、非 root 身份、固定 Vagrant 工作目录、没有现存 .vagrant 状态、无其他运行中的 VirtualBox 虚拟机，以及 src/router/dst 均处于 not_created。任一条件不满足拒绝启动。
+
+通过预检后执行以下真正的 E2E：
+
+1. 在专用宿主机执行 `vagrant up --provider=virtualbox`；
+2. 用 `lab_vm.py baseline` 和 `verify_vm_evidence.py` 核验三个独立 VM 的真实身份、私有路由和合成 HTTP；
+3. 用 `vm_pcap_baseline.py baseline-pcap` 和 `verify_vm_pcap.py` 获取并检查四个原始 PCAP、真实 POST 头、共通 TCP 上传数据区间和 SHA-256；
+4. 上传仅含合成实验流量的 Artifact（默认保留 14 天），并尝试 `vagrant destroy -f` 回收本次新建的 VM。
+
+清理 Hook 无法覆盖宿主机突然断电或 Runner 被强杀的情况，此时需要人工核对 VirtualBox 资源。不要把共享生产宿主机注册为该 Runner；不要绕过身份检查或强制对已有 VM 运行实验。
+
+**真实执行状态**：截至该 PR，没有配置可执行的专用 VirtualBox Runner，GitHub-hosted CI 只覆盖代码和合成报文测试。因此真实三 VM 的身份/HTTP/四点 PCAP E2E 仍未验证。该手动工作流**不注入 MTU 或 ICMP 丢包**，也不能代表 PMTU 黑洞、MSS 缓解或 90 秒自动回滚已通过；Issue #6 保持开放。
