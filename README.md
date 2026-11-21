@@ -120,6 +120,12 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 
 与 LAB-01/02 的默认 Kind 环境不同：LAB-04 使用 **disableDefaultCNI: true**，安装 Calico v3.33.1 并核验 NetworkPolicy **真实执行**。LAB-04 已在三节点 Kind + Calico v3.33.1 下完成真实五阶段验收（应用 Pod 全部位于同一 Worker）；详见 [2026-11-21 验收报告](docs/verification/2026-11-21-calico-policy-e2e.md)。**这不代表跨节点 VXLAN / 物理 MTU 已验证。**
 
+## LAB-03A：跨节点 Calico VXLAN 实验
+
+[详细实验流程与验收范围](scenarios/mtu/README.md) · [实现代码](scripts/lab_cross_node.py)。
+
+已完成真实 Kind + Calico 双节点 VXLAN 验收，见 [2026-11-21 验收报告](docs/verification/2026-11-21-cross-node-vxlan-e2e.md)：源/目的 Worker 不同，双节点 PCAP 关联唯一 HTTP proof token，Baseline/Capture/Recheck 均通过。**VM MTU/PMTU 故障注入仍待开发**，不能用 Kind 的数据代替物理网络故障证据。
+
 ## 六个场景
 
 | 场景 | 内容 | 最低可接受证据 |
@@ -138,4 +144,4 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 - 公开 evidence 前务必检查日志、地址、令牌及可能包含的敏感配置。
 - 所有命令输出随 Kubernetes、Linux 内核、CNI、Service Proxy 版本和模式变化，应记录实际版本。
 
-本仓库目前定位为 **学习材料 + LAB-01/02 已实跑集成测试 + LAB-04 可执行 Calico 策略实验（须单独验收）**，不是经过真实集群全面验收的网络故障平台。
+本仓库目前定位为 **学习材料 + LAB-01/02 已实跑集成测试 + LAB-04 已真实验收 + LAB-03A 跨节点抓包待真实 CI 验收**，不是经过真实集群全面验收的网络故障平台。

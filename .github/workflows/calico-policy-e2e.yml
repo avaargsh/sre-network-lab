@@ -1,4 +1,4 @@
-name: Calico NetworkPolicy integration (LAB-04)
+name: Calico Policy and Cross-node VXLAN (LAB-03/04)
 on:
   pull_request:
     paths:
@@ -9,6 +9,9 @@ on:
       - 'scenarios/network-policy/**'
       - 'environments/kind/calico*.yaml'
       - 'tests/test_policy_lab.py'
+      - 'tests/test_cross_node.py'
+      - 'scripts/lab_cross_node.py'
+      - 'scenarios/mtu/**'
   workflow_dispatch:
 permissions:
   contents: read
@@ -77,6 +80,15 @@ jobs:
           scripts/lab-policy.sh restore
           scripts/verify-recovery.sh network-policy
           scripts/collect-evidence.sh network-policy recovery
+      - name: LAB-03 two-worker VXLAN packet evidence
+        run: |
+          set -euo pipefail
+          export RUN_ID="cross-node-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          trap 'python3 scripts/lab_cross_node.py cleanup || true' EXIT
+          python3 scripts/lab_cross_node.py setup
+          python3 scripts/lab_cross_node.py baseline
+          python3 scripts/lab_cross_node.py capture
+          python3 scripts/lab_cross_node.py recheck
       - name: Debug on failure (ephemeral cluster only)
         if: failure()
         run: |
@@ -84,6 +96,7 @@ jobs:
           kubectl get tigerastatus || true
           kubectl get pods -A -o wide || true
           kubectl -n sre-lab-policy get networkpolicies -o yaml || true
+          kubectl -n sre-lab-cross-node get pods -o wide || true
           kubectl -n calico-system get pods -o wide || true
       - name: Upload test evidence
         if: always()

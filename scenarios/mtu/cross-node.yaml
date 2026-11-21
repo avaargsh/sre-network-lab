@@ -1,0 +1,101 @@
+# LAB-03A: pinned PodIP cross-worker flow; host-network sniffers capture node underlay.
+# Replacements are performed by lab_cross_node.py; do not apply this template directly.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sre-lab-cross-node
+  labels:
+    sre-network-lab.io/owner: cross-node-vxlan
+    app.kubernetes.io/part-of: sre-network-lab
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab03-server
+  namespace: sre-lab-cross-node
+  labels: {app: lab03-server, app.kubernetes.io/part-of: sre-network-lab}
+spec:
+  nodeName: __DEST_NODE__
+  containers:
+    - name: http-echo
+      image: hashicorp/http-echo:1.0.0
+      args: ["-listen=:5678", "-text=sre-network-lab-cross-node-ok"]
+      ports: [{name: http, containerPort: 5678}]
+      readinessProbe:
+        httpGet: {path: /, port: http}
+        initialDelaySeconds: 1
+        periodSeconds: 3
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 200m, memory: 64Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab03-client
+  namespace: sre-lab-cross-node
+  labels: {app: lab03-client, app.kubernetes.io/part-of: sre-network-lab}
+spec:
+  nodeName: __SOURCE_NODE__
+  containers:
+    - name: probe
+      image: nicolaka/netshoot:v0.14
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 200m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab03-sniff-src
+  namespace: sre-lab-cross-node
+  labels: {app: lab03-sniff-src, app.kubernetes.io/part-of: sre-network-lab}
+spec:
+  nodeName: __SOURCE_NODE__
+  hostNetwork: true
+  dnsPolicy: ClusterFirstWithHostNet
+  containers:
+    - name: sniffer
+      image: nicolaka/netshoot:v0.14
+      command: ["sleep", "infinity"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          add: [NET_RAW, NET_ADMIN]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 200m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab03-sniff-dst
+  namespace: sre-lab-cross-node
+  labels: {app: lab03-sniff-dst, app.kubernetes.io/part-of: sre-network-lab}
+spec:
+  nodeName: __DEST_NODE__
+  hostNetwork: true
+  dnsPolicy: ClusterFirstWithHostNet
+  containers:
+    - name: sniffer
+      image: nicolaka/netshoot:v0.14
+      command: ["sleep", "infinity"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          add: [NET_RAW, NET_ADMIN]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 200m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab03-echo
+  namespace: sre-lab-cross-node
+  labels: {app.kubernetes.io/part-of: sre-network-lab}
+spec:
+  selector: {app: lab03-server}
+  ports:
+    - {name: http, protocol: TCP, port: 80, targetPort: http}
