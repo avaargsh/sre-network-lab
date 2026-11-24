@@ -63,6 +63,11 @@ class WatchdogContracts(unittest.TestCase):
                     "status": "ARMED", "run_id": current_run, "mtu": 1200,
                     "timer_active": True, "deadline_epoch": 1090, "interface": "enp0s9",
                 }
+            if op == "inspect" and router_calls.count("inspect") == 1:
+                return {
+                    "status": "ARMED", "run_id": current_run, "mtu": 1200,
+                    "timer_active": True, "deadline_epoch": 1090, "interface": "enp0s9",
+                }
             if op == "inspect":
                 return {
                     "status": "NO_ACTIVE_LEASE", "run_id": current_run, "mtu": 1500,
@@ -90,7 +95,7 @@ class WatchdogContracts(unittest.TestCase):
             result = drill.drill(run_id, rollback_mode="watchdog")
 
         self.assertEqual(result, 0)
-        self.assertEqual(router_calls, ["arm", "inspect"])
+        self.assertEqual(router_calls, ["arm", "inspect", "inspect"])
         evidence = Path(temp.name) / "evidence" / run_id
         status = json.loads((evidence / "status.json").read_text())
         watchdog = json.loads((evidence / "watchdog.json").read_text())
@@ -110,6 +115,11 @@ class WatchdogContracts(unittest.TestCase):
         def fake_router(op, current_run):
             router_calls.append(op)
             if op == "arm":
+                return {
+                    "status": "ARMED", "run_id": current_run, "mtu": 1200,
+                    "timer_active": True, "deadline_epoch": 1090, "interface": "enp0s9",
+                }
+            if op == "inspect" and router_calls.count("inspect") == 1:
                 return {
                     "status": "ARMED", "run_id": current_run, "mtu": 1200,
                     "timer_active": True, "deadline_epoch": 1090, "interface": "enp0s9",
@@ -138,11 +148,12 @@ class WatchdogContracts(unittest.TestCase):
             patch.object(drill, "guest_call", side_effect=fake_guest),
             patch.object(drill, "router_call", side_effect=fake_router),
             patch.object(drill, "wait_for_watchdog", return_value=95.0),
+            patch.object(drill.time, "time", side_effect=[1000, 1000, 1000, 1095]),
         ):
             result = drill.drill(run_id, rollback_mode="watchdog")
 
         self.assertEqual(result, 1)
-        self.assertEqual(router_calls, ["arm", "inspect", "restore"])
+        self.assertEqual(router_calls, ["arm", "inspect", "inspect", "restore"])
         evidence = Path(temp.name) / "evidence" / run_id
         status = json.loads((evidence / "status.json").read_text())
         self.assertEqual(status["result"], "NOT_VERIFIED")
