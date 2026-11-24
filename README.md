@@ -181,3 +181,8 @@ GitHub Actions CI 只运行上述静态/模拟测试，**不是 Kind 或真实 K
 - 所有命令输出随 Kubernetes、Linux 内核、CNI、Service Proxy 版本和模式变化，应记录实际版本。
 
 本仓库已验证 LAB-01/02、LAB-03A 和 LAB-04 的 Kind 数据面，LAB-03B Linux ICMP PMTU 故障，以及 LAB-03C 真实 TCP/HTTP 黑洞、MSS 缓解和恢复。独立双 VM、Envoy 与 Istio 尚未完成真实 E2E。
+
+
+### LAB-03D Stage 2D — VM TCP PMTU controls (code only; live E2E NOT VERIFIED)
+
+The Router VM now has run-scoped ICMP Fragmentation Needed drop and bidirectional TCP MSS 1160 control operations, guarded by a pre-armed 90-second systemd rollback. This is a control-plane implementation with offline contract tests only. It is **not** evidence of a real three-VM PMTU blackhole, TCP retransmission, MSS wire behavior, four-point PCAP, or watchdog recovery; see the [Stage 2D boundary and runbook](environments/vm/lab03d.md).

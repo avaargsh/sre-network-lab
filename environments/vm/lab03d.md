@@ -52,9 +52,9 @@ vagrant destroy -f
 - HTTP 不能只检查 TCP 能连接，还要检查 200、health 正文、64KiB POST 的 SHA256。
 - 控制器不支持任意 SSH Host/目标 IP/故障命令，本阶段不会修改运行中的 VM 或宿主机网络规则。
 
-## 下一阶段：三 VM 实际 MTU 故障（仍未实现）
+## 后续：真实三 VM 数据面验收（仍待执行）
 
-独立 VM Baseline 通过后再实现：Router 的指定实验网卡 MTU 限制、SSH 断连仍能执行的有时限自动回滚、src/router/dst 三点抓包、TCP/ICMP 业务矩阵、恢复后业务重验以及可信证据归档。
+Stage 2A 的 Router MTU 租约/恢复控制器、Stage 2B 的四接口抓包工具及 90 秒 watchdog 验证入口已经实现。剩余工作是在专用宿主机真实启动三台 VM，执行 Baseline、四点 PCAP、SSH 会话退出后的自动回滚和 HTTP 恢复验收；之后再实现真实 ICMP 黑洞与 TCP/MSS 业务矩阵。
 
 这些都需要在实际三 VM 中执行并验收，**不能用单机 Namespace 的绿色 CI 代替**，Issue #6 保持开放。
 
@@ -80,6 +80,11 @@ export RUN_ID="mtu-vm-$(date -u +%Y%m%d%H%M%S)"
 
 python3 environments/vm/vm_mtu_drill.py drill --run-id "$RUN_ID"
 python3 environments/vm/verify_vm_fault.py "evidence/$RUN_ID"
+
+# 单独实测 SSH 会话退出后的 90 秒自动回滚（等待约 95 秒）
+WATCHDOG_RUN_ID="mtu-watchdog-$(date -u +%Y%m%d%H%M%S)"
+python3 environments/vm/vm_mtu_drill.py drill --rollback-mode watchdog --run-id "$WATCHDOG_RUN_ID"
+python3 environments/vm/verify_vm_fault.py "evidence/$WATCHDOG_RUN_ID"
 ~~~
 
 Router 的 Vagrant Provision 会把本仓库中的 root helper 安装到 `/usr/local/libexec/sre-lab03d-router-fault.py`，自动回滚由该已安装的脚本执行，而不是依赖 SSH 会话。
@@ -90,7 +95,7 @@ Router 的 Vagrant Provision 会把本仓库中的 root helper 安装到 `/usr/l
 2. Router Helper 独立确认实验标记、两条私有接口、ip_forward、原始 MTU 必须为 1500，且无正在执行的租约。
 3. **先写 root-only 的运行租约、注册 90 秒 systemd transient timer 并确认其 ACTIVE，再修改 Router 私有接口 MTU 为 1200**；任一检查失败立即拒绝注入。
 4. MTU 改变后重验定时器和接口当前值，执行小 HTTP /health 与 64 KiB POST。此阶段**不丢弃 ICMP Fragmentation Needed**，不能要求大 HTTP 必然超时，更不能冒称已观察 TCP 黑洞。
-5. Host 无论成功或失败都尝试提前恢复 MTU 1500 并进行 HTTP 恢复验收。若 SSH 中断，预先注册的 systemd timer 应在租约期满时尝试恢复；若无法取得实际确认，结果仍为 NOT VERIFIED。
+5. 默认 `--rollback-mode manual` 会提前 SSH 恢复并验收 HTTP。新增 `--rollback-mode watchdog` 会在 arm 命令的 SSH 进程退出后，不再向 Router 发起 SSH 请求，等待完整 90 秒租约加 5 秒宽限，再重新连接执行只读 inspect；只有看到租约已消失、MTU=1500 且 timer inactive，才记为 watchdog PASS。若证据不满足，会尝试人工恢复作为安全兜底，但整个 watchdog 实验仍为 NOT_VERIFIED。
 
 系统只接受当前合法 Run ID 的操作。租约归属不符、timer 未活动、试图选择管理接口、恢复 MTU 未经读回确认，均不返回 PASS。
 
@@ -104,9 +109,9 @@ vagrant ssh router -c 'sudo -n systemctl list-timers --all --no-pager | grep sre
 vagrant ssh router -c "sudo -n python3 /usr/local/libexec/sre-lab03d-router-fault.py restore $RUN_ID"
 ~~~
 
-证据位于 `evidence/<RUN_ID>`：Router 租约、定时器回执、故障和恢复的 HTTP 结果、独立虚拟机拓扑与 SHA256SUMS。通过 `verify_vm_fault.py` 复验；此阶段 `pcap`、`blackhole`、`network` 三项仍强制标为 NOT_VERIFIED。
+证据位于 `evidence/<RUN_ID>`：Router 租约、故障窗口回执、`watchdog.json`（实际等待时间、过期后的 Router inspect）、故障和恢复的 HTTP 结果、独立虚拟机拓扑与 SHA256SUMS。通过 `verify_vm_fault.py` 复验。人工模式的 watchdog 维度保持 NOT_VERIFIED；watchdog 模式必须有至少 95 秒单调时钟等待、至少 90 秒记录窗口、`NO_ACTIVE_LEASE`、MTU=1500、timer inactive 及 systemd-watchdog 来源的恢复回执，缺一不可。此阶段 `pcap`、`blackhole`、`network` 三项仍强制标为 NOT_VERIFIED。
 
-**后续阶段**：在真 VM 上验收 90 秒 watchdog（含 SSH 中断）、三 VM 多点 PCAP、ICMP 丢失的真实黑洞及 TCP/MSS 恢复。没有这些独立证据，Issue #6 继续 OPEN。
+**Watchdog 验收入口已实现，真实 VM 实测仍待执行**：在专用三 VM 宿主机上先完成 Stage 1 Baseline，再运行下面的 watchdog 模式。GitHub-hosted CI 只覆盖控制流程和证据审计，不会启动 VirtualBox Guest。没有专用 Runner 的真实 Artifact，不能宣称 SSH 断连自动回滚已经实测。三 VM 多点 PCAP、ICMP 丢失的真实黑洞及 TCP/MSS 恢复仍待后续完成，Issue #6 继续 OPEN。
 
 
 ## Stage 2B：三独立 VM 四接口抓包基线（程序已实现，真实环境待验证）
@@ -162,4 +167,37 @@ Host 控制器先验证三台 VM 的独立机器/启动身份、管理网卡隔�
 
 清理 Hook 无法覆盖宿主机突然断电或 Runner 被强杀的情况，此时需要人工核对 VirtualBox 资源。不要把共享生产宿主机注册为该 Runner；不要绕过身份检查或强制对已有 VM 运行实验。
 
-**真实执行状态**：截至该 PR，没有配置可执行的专用 VirtualBox Runner，GitHub-hosted CI 只覆盖代码和合成报文测试。因此真实三 VM 的身份/HTTP/四点 PCAP E2E 仍未验证。该手动工作流**不注入 MTU 或 ICMP 丢包**，也不能代表 PMTU 黑洞、MSS 缓解或 90 秒自动回滚已通过；Issue #6 保持开放。
+**真实执行状态**：截至该 PR，没有配置可执行的专用 VirtualBox Runner，GitHub-hosted CI 只覆盖代码和合成报文测试。因此真实三 VM 的身份/HTTP/四点 PCAP E2E 仍未验证。工作流默认只执行 Baseline/PCAP；只有另行填写第二确认 `I_CONFIRM_ROUTER_MTU_WATCHDOG` 才会执行 90 秒 watchdog 故障实验。它不注入 ICMP 丢包，也不代表 PMTU 黑洞或 MSS 缓解已通过；没有真实 Runner Artifact 前，不得宣称 VM watchdog 实测通过。Issue #6 保持开放。
+
+
+## Stage 2D — Router VM TCP PMTU blackhole control primitives (implemented; live E2E NOT VERIFIED)
+
+The Router guest now has fixed-scope control operations for the next TCP PMTU experiment:
+
+- **arm-blackhole**: pre-register a 90-second systemd rollback timer, install a run-scoped OUTPUT rule dropping only ICMP Fragmentation Needed toward 10.209.10.2 on the private left NIC, then lower only the Router right data NIC MTU from 1500 to 1200.
+- **mitigate**: while the same lease and watchdog are active, install run-scoped bidirectional TCP SYN MSS clamping to 1160 for only 10.209.10.2 ↔ 10.209.20.2 across the two private interfaces.
+- **inspect**: read back the lease, timer, firewall rule presence and packet counters.
+- **restore**: set the Router data NIC MTU back to 1500, remove only the current run's owner-marked firewall chains, and stop its timer. The same restore path is used by the systemd watchdog.
+
+The Router provisioning now installs iptables. Rule chains are unique per validated RUN_ID; cleanup refuses to delete chains without the exact ownership marker or when unexpected rules remain. A new run is refused if stale LAB-03D-owned chains/comments are detected.
+
+### Manual helper smoke procedure (dedicated isolated VirtualBox lab only)
+
+This exercises the Router control primitive, not the complete network acceptance. First provision and start the three VMs using the Stage 1 instructions. Then:
+
+~~~bash
+cd environments/vm
+vagrant provision router
+RUN_ID="pmtu-vm-$(date -u +%Y%m%d%H%M%S)"
+
+vagrant ssh router -c "sudo -n env SRE_LAB_VM_FAULT_ACK=1 SRE_LAB_VM_SCOPE=sre-lab03d-vbox-intnet python3 /usr/local/libexec/sre-lab03d-router-fault.py arm-blackhole $RUN_ID"
+vagrant ssh router -c "sudo -n python3 /usr/local/libexec/sre-lab03d-router-fault.py inspect $RUN_ID"
+vagrant ssh router -c "sudo -n python3 /usr/local/libexec/sre-lab03d-router-fault.py mitigate $RUN_ID"
+vagrant ssh router -c "sudo -n python3 /usr/local/libexec/sre-lab03d-router-fault.py inspect $RUN_ID"
+vagrant ssh router -c "sudo -n python3 /usr/local/libexec/sre-lab03d-router-fault.py restore $RUN_ID"
+vagrant ssh router -c "sudo -n python3 /usr/local/libexec/sre-lab03d-router-fault.py inspect $RUN_ID"
+~~~
+
+Do not run this on a shared or production Router. If the lease expires, the systemd timer attempts restoration without depending on the host SSH session. Verify MTU and firewall cleanup before another experiment.
+
+**Evidence boundary:** this stage adds and unit-tests the Router-side controls only. It does not yet orchestrate baseline → blackhole → MSS mitigation → recovery, collect phase-specific four-point PCAPs, independently audit TCP retransmissions/MSS on the wire, or test the 90-second watchdog after a deliberately disconnected SSH client. There is no real three-VM E2E Artifact yet. All those outcomes remain NOT_VERIFIED; Issue #6 must remain OPEN.

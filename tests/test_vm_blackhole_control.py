@@ -77,7 +77,7 @@ class BlackholeScopeContracts(unittest.TestCase):
 
 class BlackholeLeaseContracts(unittest.TestCase):
     def test_orphaned_firewall_state_blocks_a_new_run(self):
-        result = mock.Mock(returncode=0, stdout="-N S3I12345678\\n")
+        result = mock.Mock(returncode=0, stdout="-N S3I12345678\n")
         with mock.patch.object(fault, "ipt", return_value=result):
             with self.assertRaises(ValueError):
                 fault.ensure_no_orphaned_lab_rules()
@@ -166,6 +166,49 @@ class BlackholeLeaseContracts(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     fault.mitigate("safe-run01", guest_context())
                 add_chain.assert_not_called()
+
+    def test_validate_state_rejects_foreign_chain_or_interface(self):
+        state = active_state()
+        fault.validate_state(state, guest_context())
+        for changed in (
+            {**state, "icmp_chain": "S3I00000000"},
+            {**state, "firewall_tag": "sre-lab03d:other-run"},
+            {**state, "left_iface": "enp0s3"},
+        ):
+            with self.assertRaises(ValueError):
+                fault.validate_state(changed, guest_context())
+
+    def test_cleanup_refuses_chain_without_owner_marker(self):
+        rule = ("-p", "icmp", "-j", "DROP")
+        with (
+            mock.patch.object(fault, "chain_exists", return_value=True),
+            mock.patch.object(fault, "rule_exists", return_value=False),
+            mock.patch.object(fault, "ipt") as run_iptables,
+        ):
+            with self.assertRaises(ValueError):
+                fault.remove_owned_chain("filter", "OUTPUT", "S3I12345678",
+                                         "sre-lab03d:safe-run01", (rule,))
+        run_iptables.assert_not_called()
+
+    def test_cleanup_removes_only_owner_marked_rules_and_chain(self):
+        rule = ("-p", "icmp", "-j", "DROP")
+        with (
+            mock.patch.object(fault, "chain_exists", return_value=True),
+            mock.patch.object(fault, "rule_exists", side_effect=[True, True, True, True]),
+            mock.patch.object(fault, "ipt", side_effect=[
+                mock.Mock(returncode=0, stdout=""),
+                mock.Mock(returncode=0, stdout=""),
+                mock.Mock(returncode=0, stdout=""),
+                mock.Mock(returncode=0, stdout="-N S3I12345678\n"),
+                mock.Mock(returncode=0, stdout=""),
+            ]) as run_iptables,
+        ):
+            self.assertTrue(fault.remove_owned_chain(
+                "filter", "OUTPUT", "S3I12345678",
+                "sre-lab03d:safe-run01", (rule,)))
+        self.assertEqual(run_iptables.call_count, 5)
+        self.assertEqual(run_iptables.call_args_list[-1].args,
+                         ("filter", "-X", "S3I12345678"))
 
     def test_remote_operations_are_closed_and_run_id_bound(self):
         for op in ("arm-blackhole", "mitigate", "inspect", "restore"):
