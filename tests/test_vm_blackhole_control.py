@@ -367,5 +367,30 @@ class BlackholeRestoreSafetyContracts(unittest.TestCase):
         remove_chain.assert_not_called()
 
 
+    def test_mitigate_rechecks_watchdog_after_installing_mss_rules(self):
+        state = active_state()
+        reports = iter((
+            {"icmp_drop_active": True, "icmp_drop_packets": 1,
+             "mss_active": False, "mss_packets": 0},
+            {"icmp_drop_active": True, "icmp_drop_packets": 2,
+             "mss_active": True, "mss_packets": 1},
+        ))
+        timers = iter((True, False))
+        with (
+            mock.patch.object(fault, "load_state", return_value=state),
+            mock.patch.object(fault, "validate_state"),
+            mock.patch.object(fault, "current_mtu", side_effect=(1200, 1200)),
+            mock.patch.object(fault, "timer_active", side_effect=lambda _: next(timers)),
+            mock.patch.object(fault, "store_state"),
+            mock.patch.object(fault, "add_owned_chain"),
+            mock.patch.object(fault, "firewall_report", side_effect=lambda *_: next(reports)),
+            mock.patch.object(fault, "restore") as rollback,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "outlived"):
+                fault.mitigate("safe-run01", guest_context())
+        rollback.assert_called_once_with("safe-run01", guest_context())
+
+
+
 if __name__ == "__main__":
     unittest.main()
