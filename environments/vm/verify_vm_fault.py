@@ -11,11 +11,16 @@ import sys
 
 from http_vm import SHA256
 from lab_vm import require_independent_vms, require_http_proof
-from vm_mtu_drill import require_armed, require_restored, UNVERIFIED
+from vm_mtu_drill import (
+    TTL, WATCHDOG_WAIT_SECONDS, require_armed, require_restored,
+    require_watchdog_restored, UNVERIFIED,
+)
 
-FILES = {"topology.json", "baseline.json", "fault_health.json",
-         "fault_upload.json", "lease.json", "fault_inspect.json",
-         "rollback.json", "recovery.json", "status.json"}
+FILES = {
+    "topology.json", "baseline.json", "fault_health.json",
+    "fault_upload.json", "lease.json", "fault_inspect.json",
+    "watchdog.json", "rollback.json", "recovery.json", "status.json",
+}
 
 
 def verify(root: Path, expected_sha: str = SHA256):
@@ -36,35 +41,66 @@ def verify(root: Path, expected_sha: str = SHA256):
     for name, checksum in checksums.items():
         if hashlib.sha256((root / name).read_bytes()).hexdigest() != checksum:
             raise ValueError(f"SHA-256 mismatch: {name}")
+
     read = lambda key: json.loads((root / (key + ".json")).read_text())
-    status = read("status")
-    expected = {"result": "PASS", "topology": "PASS", "mtu_lease": "PASS",
-                "baseline_http": "PASS", "recovery_http": "PASS",
-                "scope": "3 VirtualBox VMs; actual E2E required", **UNVERIFIED}
-    if status != expected:
-        raise ValueError("illegal success or false multi-VM PCAP/blackhole claim")
+    run_id = root.name
     topology = read("topology")
     require_independent_vms(topology)
     require_http_proof(read("baseline"), expected_sha)
     require_http_proof(read("recovery"), expected_sha)
-    health = read("fault_health")
-    if (health.get("ok") is not True or health.get("status") != 200
-            or health.get("body") != "healthy"):
-        raise ValueError("fault window small HTTP proof missing")
-    run_id = root.name
+
     lease = read("lease")
     receipt = read("fault_inspect")
     if not isinstance(lease.get("deadline_epoch"), int):
         raise ValueError("watchdog deadline missing")
-    approximate_start = lease["deadline_epoch"] - 90
+    approximate_start = lease["deadline_epoch"] - TTL
     require_armed(lease, run_id, approximate_start)
     require_armed(receipt, run_id, approximate_start)
-    if lease.get("interface") != receipt.get("interface") or \
-            topology["router"]["links"].get(lease.get("interface")) != "10.209.20.1":
+    if (lease.get("interface") != receipt.get("interface")
+            or topology["router"]["links"].get(lease.get("interface")) != "10.209.20.1"):
         raise ValueError("MTU lease target is not the Router private NIC")
-    require_restored(read("rollback"), run_id)
-    return {"status": "PASS", "files_hashed": len(checksums),
-            "mtu_lease": "PASS", "recovery_http": "PASS", **UNVERIFIED}
+
+    watchdog = read("watchdog")
+    if watchdog == {"status": "NOT_RUN", "run_id": run_id}:
+        watchdog_status = "NOT_VERIFIED"
+    else:
+        require_watchdog_restored(watchdog, run_id)
+        if watchdog.get("interface") != lease.get("interface"):
+            raise ValueError("watchdog inspected a different Router interface")
+        waited = watchdog.get("waited_seconds")
+        if type(waited) not in (int, float) or waited < WATCHDOG_WAIT_SECONDS:
+            raise ValueError("watchdog wait did not cover the full lease plus grace")
+        started = watchdog.get("wait_started_epoch")
+        finished = watchdog.get("wait_finished_epoch")
+        if (type(started) is not int or type(finished) is not int
+                or finished - started < TTL):
+            raise ValueError("watchdog wall-clock interval is shorter than the lease")
+        watchdog_status = "PASS"
+
+    status = read("status")
+    expected = {
+        "result": "PASS", "topology": "PASS", "mtu_lease": "PASS",
+        "baseline_http": "PASS", "recovery_http": "PASS",
+        "watchdog": watchdog_status,
+        "scope": "3 VirtualBox VMs; actual E2E required",
+        **UNVERIFIED,
+    }
+    if status != expected:
+        raise ValueError("illegal success or false watchdog/PCAP/blackhole claim")
+
+    health = read("fault_health")
+    if (health.get("ok") is not True or health.get("status") != 200
+            or health.get("body") != "healthy"):
+        raise ValueError("fault window small HTTP proof missing")
+    rollback = read("rollback")
+    require_restored(rollback, run_id)
+    if watchdog_status == "PASS" and rollback.get("source") != "systemd-watchdog":
+        raise ValueError("watchdog success lacks a timer-sourced rollback receipt")
+    return {
+        "status": "PASS", "files_hashed": len(checksums),
+        "mtu_lease": "PASS", "recovery_http": "PASS",
+        "watchdog": watchdog_status, **UNVERIFIED,
+    }
 
 
 if __name__ == "__main__":
