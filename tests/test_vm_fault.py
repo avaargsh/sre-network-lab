@@ -96,7 +96,8 @@ class FaultSafetyContracts(unittest.TestCase):
         calls=[]
         with (patch.object(fault,"current_mtu",side_effect=[1500,1200]),
               patch.object(fault,"load_state",return_value=None),
-              patch.object(fault,"timer_active",side_effect=[False,True]),
+              patch.object(fault,"timer_active",side_effect=[False,True,True]),
+              patch.object(fault,"ensure_no_orphaned_lab_rules"),
               patch.object(fault,"store_state"),
               patch.object(fault,"cmd",side_effect=lambda *a, **kw: calls.append(a))):
             receipt=fault.arm("safe-run01",guest_context())
@@ -110,6 +111,7 @@ class FaultSafetyContracts(unittest.TestCase):
         with (patch.object(fault,"current_mtu",return_value=1500),
               patch.object(fault,"load_state",return_value=None),
               patch.object(fault,"timer_active",return_value=False),
+              patch.object(fault,"ensure_no_orphaned_lab_rules"),
               patch.object(fault,"store_state"),
               patch.object(fault,"restore") as rollback,
               patch.object(fault,"cmd",side_effect=lambda *a, **kw: calls.append(a))):
