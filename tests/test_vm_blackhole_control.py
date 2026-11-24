@@ -289,5 +289,66 @@ class WatchdogArmFinalCheckContracts(unittest.TestCase):
         rollback.assert_called_once_with("safe-run01", guest_context())
 
 
+
+    def test_inspect_refuses_mtu_only_lease_when_watchdog_is_inactive(self):
+        state = {
+            "run_id": "safe-run01", "iface": "enp0s9", "original_mtu": 1500,
+            "boot_id": guest_context()["boot_id"], "deadline_epoch": 1090,
+        }
+        with (
+            mock.patch.object(fault, "load_state", return_value=state),
+            mock.patch.object(fault, "validate_state"),
+            mock.patch.object(fault, "current_mtu", return_value=1200),
+            mock.patch.object(fault, "timer_active", return_value=False),
+        ):
+            with self.assertRaises(ValueError):
+                fault.inspect("safe-run01", guest_context())
+
+    def test_inspect_refuses_mtu_only_lease_when_router_mtu_is_not_fault_value(self):
+        state = {
+            "run_id": "safe-run01", "iface": "enp0s9", "original_mtu": 1500,
+            "boot_id": guest_context()["boot_id"], "deadline_epoch": 1090,
+        }
+        with (
+            mock.patch.object(fault, "load_state", return_value=state),
+            mock.patch.object(fault, "validate_state"),
+            mock.patch.object(fault, "current_mtu", return_value=1500),
+            mock.patch.object(fault, "timer_active", return_value=True),
+        ):
+            with self.assertRaises(ValueError):
+                fault.inspect("safe-run01", guest_context())
+
+
+class LegacyArmSafetyContracts(unittest.TestCase):
+    def test_mtu_only_arm_refuses_orphaned_lab_firewall_state(self):
+        with (
+            mock.patch.object(fault, "current_mtu", return_value=1500),
+            mock.patch.object(fault, "load_state", return_value=None),
+            mock.patch.object(fault, "timer_active", return_value=False),
+            mock.patch.object(fault, "ensure_no_orphaned_lab_rules",
+                              side_effect=ValueError("orphaned LAB-03D firewall state")),
+            mock.patch.object(fault, "store_state") as store_state,
+            mock.patch.object(fault, "cmd") as run_command,
+        ):
+            with self.assertRaises(ValueError):
+                fault.arm("safe-run01", guest_context())
+        store_state.assert_not_called()
+        run_command.assert_not_called()
+
+    def test_mtu_only_arm_rechecks_watchdog_after_fault_setup(self):
+        timer_states = iter((False, True, False))
+        with (
+            mock.patch.object(fault, "current_mtu", side_effect=(1500, 1200)),
+            mock.patch.object(fault, "load_state", return_value=None),
+            mock.patch.object(fault, "timer_active", side_effect=lambda _: next(timer_states)),
+            mock.patch.object(fault, "store_state"),
+            mock.patch.object(fault, "cmd"),
+            mock.patch.object(fault, "restore") as rollback,
+        ):
+            with self.assertRaises(RuntimeError):
+                fault.arm("safe-run01", guest_context())
+        rollback.assert_called_once_with("safe-run01", guest_context())
+
+
 if __name__ == "__main__":
     unittest.main()
