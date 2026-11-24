@@ -88,7 +88,7 @@ def wait_for_watchdog(sleep_fn=None, monotonic_fn=None) -> float:
 
 def remote_shell(op: str, run_id: str) -> str:
     argv = remote_argv(op, require_run_id(run_id))
-    if op == "arm":
+    if op in ("arm", "arm-blackhole"):
         prefix = ("sudo -n env SRE_LAB_VM_FAULT_ACK=1 "
                   f"SRE_LAB_VM_SCOPE={LAB} ")
     else:

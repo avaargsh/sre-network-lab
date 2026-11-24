@@ -495,6 +495,9 @@ def mitigate(run_id, context):
     if not report["mss_active"] or not report["icmp_drop_active"]:
         restore(run_id, context)
         raise RuntimeError("MSS mitigation or ICMP blackhole rule did not verify")
+    if current_mtu(state["iface"]) != FAULT_MTU or not timer_active(run_id):
+        restore(run_id, context)
+        raise RuntimeError("MSS mitigation outlived the active blackhole lease")
     return {
         "status": "MITIGATED", "run_id": run_id, "mtu": FAULT_MTU,
         "deadline_epoch": state["deadline_epoch"], "timer_active": True,
@@ -508,7 +511,8 @@ def inspect(run_id, context):
         dev = choose_private_link(context)
         if current_mtu(dev) != ORIGINAL_MTU:
             raise ValueError("no owned lease for nonbaseline MTU")
-        if timer_active(run_id):
+        active = timer_active(run_id)
+        if active:
             raise ValueError("orphaned rollback timer without an active lease")
         ensure_no_orphaned_lab_rules()
         specs = blackhole_rule_specs(run_id, context)
@@ -521,7 +525,7 @@ def inspect(run_id, context):
             raise ValueError("orphaned run-scoped firewall resources remain")
         return {"status": "NO_ACTIVE_LEASE", "run_id": run_id,
                 "interface": dev, "mtu": ORIGINAL_MTU,
-                "timer_active": timer_active(run_id), "firewall_clean": True}
+                "timer_active": False, "firewall_clean": True}
 
     validate_state(state, context)
     if state["run_id"] != run_id:

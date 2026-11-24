@@ -161,5 +161,19 @@ class WatchdogContracts(unittest.TestCase):
         self.assertTrue((evidence / "recovery.json").is_file())
 
 
+    def test_remote_shell_authorizes_both_fault_arm_operations(self):
+        for operation in ("arm", "arm-blackhole"):
+            command = drill.remote_shell(operation, "watchdog-run04")
+            self.assertIn("SRE_LAB_VM_FAULT_ACK=1", command)
+            self.assertIn(f"SRE_LAB_VM_SCOPE={drill.LAB}", command)
+            self.assertIn(f" {operation} watchdog-run04", command)
+
+        for operation in ("mitigate", "inspect", "restore"):
+            command = drill.remote_shell(operation, "watchdog-run04")
+            self.assertTrue(command.startswith("sudo -n "))
+            self.assertNotIn("SRE_LAB_VM_FAULT_ACK=1", command)
+
+
+
 if __name__ == "__main__":
     unittest.main()
