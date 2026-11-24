@@ -73,7 +73,7 @@ def verify(root: Path, expected_sha: str = SHA256):
         started = watchdog.get("wait_started_epoch")
         finished = watchdog.get("wait_finished_epoch")
         if (type(started) is not int or type(finished) is not int
-                or finished - started < 90):
+                or finished - started < TTL):
             raise ValueError("watchdog wall-clock interval is shorter than the lease")
         watchdog_status = "PASS"
 
