@@ -165,18 +165,31 @@ def restore(run_id, context):
     dev = choose_private_link(context)
     state = load_state()
     if state is None:
-        if current_mtu(dev) != 1500:
+        if current_mtu(dev) != ORIGINAL_MTU:
             raise ValueError("no owned lease for nonbaseline MTU")
-        return {"status": "NO_ACTIVE_LEASE", "run_id": run_id, "mtu": 1500}
+        return {"status": "NO_ACTIVE_LEASE", "run_id": run_id, "mtu": ORIGINAL_MTU}
     validate_state(state, context)
     if state["run_id"] != run_id:
         raise ValueError("wrong lease owner")
-    cmd("ip", "link", "set", "dev", dev, "mtu", "1500")
-    if current_mtu(dev) != 1500:
-        raise RuntimeError("MTU recovery not confirmed; retain lease")
+
+    # Only restore the exact value this lease injected. If another operator
+    # changed the interface to an unexpected MTU, preserve it and keep the
+    # lease/watchdog state for manual reconciliation instead of clobbering it.
+    observed_mtu = current_mtu(dev)
+    if observed_mtu not in (FAULT_MTU, ORIGINAL_MTU):
+        raise ValueError(
+            f"unexpected MTU {observed_mtu}; refusing to overwrite external change"
+        )
+    if observed_mtu == FAULT_MTU:
+        cmd("ip", "link", "set", "dev", dev, "mtu", str(ORIGINAL_MTU))
+        if current_mtu(dev) != ORIGINAL_MTU:
+            raise RuntimeError("MTU recovery not confirmed; retain lease")
+    # If it is already at baseline, make recovery idempotent without issuing
+    # another link mutation. This also avoids needlessly overwriting a valid
+    # operator-initiated recovery.
     STATE.unlink()
     cmd("systemctl", "stop", unit_name(run_id) + ".timer", check=False)
-    return {"status": "RESTORED", "run_id": run_id, "mtu": 1500}
+    return {"status": "RESTORED", "run_id": run_id, "mtu": ORIGINAL_MTU}
 
 
 def arm(run_id, context):
