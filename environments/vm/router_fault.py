@@ -175,6 +175,16 @@ def rule_exists(table, chain, *rule):
     return ipt(table, "-C", chain, *rule, check=False).returncode == 0
 
 
+def ensure_no_orphaned_lab_rules():
+    """Refuse a new lease if a prior run left any lab-owned firewall state."""
+    for table in ("filter", "mangle"):
+        result = ipt(table, "-S")
+        for line in result.stdout.splitlines():
+            if (re.search(r"^-N S3[IM][A-F0-9]{8}$", line)
+                    or "sre-lab03d:" in line):
+                raise ValueError("orphaned LAB-03D firewall state; manual review required")
+
+
 def add_owned_chain(table, parent, chain, tag, rules):
     """Create one unique chain; the owner marker makes cleanup non-ambiguous."""
     if chain_exists(table, chain):
@@ -398,6 +408,7 @@ def arm_blackhole(run_id, context):
     require_arm_preconditions(mtu, load_state() is not None)
     if timer_active(run_id):
         raise ValueError("timer already active for run")
+    ensure_no_orphaned_lab_rules()
     specs = blackhole_rule_specs(run_id, context)
     for item in (specs["icmp"], specs["mss"]):
         if chain_exists(item["table"], item["chain"]) or \
@@ -424,6 +435,9 @@ def arm_blackhole(run_id, context):
         cmd(*fault_cmd)
         if current_mtu(dev) != FAULT_MTU:
             raise RuntimeError("blackhole MTU readback failed")
+        report = firewall_report(state, context)
+        if not report["icmp_drop_active"]:
+            raise RuntimeError("ICMP Fragmentation Needed drop rule did not verify")
     except Exception:
         # Preserve the timer if immediate cleanup cannot be confirmed.
         restore(run_id, context)
@@ -445,6 +459,8 @@ def mitigate(run_id, context):
         raise ValueError("MSS mitigation requires this run's blackhole lease")
     if current_mtu(state["iface"]) != FAULT_MTU or not timer_active(run_id):
         raise ValueError("blackhole MTU or rollback watchdog is no longer active")
+    if not firewall_report(state, context)["icmp_drop_active"]:
+        raise ValueError("owned ICMP blackhole rule is not active")
     if state.get("mss_chain") is not None:
         raise ValueError("MSS mitigation already active")
     specs = blackhole_rule_specs(run_id, context)
@@ -474,6 +490,7 @@ def inspect(run_id, context):
         dev = choose_private_link(context)
         if current_mtu(dev) != ORIGINAL_MTU:
             raise ValueError("no owned lease for nonbaseline MTU")
+        ensure_no_orphaned_lab_rules()
         specs = blackhole_rule_specs(run_id, context)
         clean = True
         for item in (specs["icmp"], specs["mss"]):

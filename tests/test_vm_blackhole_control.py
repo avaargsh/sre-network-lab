@@ -76,6 +76,12 @@ class BlackholeScopeContracts(unittest.TestCase):
 
 
 class BlackholeLeaseContracts(unittest.TestCase):
+    def test_orphaned_firewall_state_blocks_a_new_run(self):
+        result = mock.Mock(returncode=0, stdout="-N S3I12345678\\n")
+        with mock.patch.object(fault, "ipt", return_value=result):
+            with self.assertRaises(ValueError):
+                fault.ensure_no_orphaned_lab_rules()
+
     def test_blackhole_watchdog_is_armed_before_icmp_drop_and_mtu_change(self):
         events = []
         with (
@@ -83,12 +89,17 @@ class BlackholeLeaseContracts(unittest.TestCase):
             mock.patch.object(fault, "load_state", return_value=None),
             mock.patch.object(fault, "timer_active", side_effect=[False, True]),
             mock.patch.object(fault, "store_state"),
+            mock.patch.object(fault, "ensure_no_orphaned_lab_rules"),
             mock.patch.object(fault, "chain_exists", return_value=False),
             mock.patch.object(fault, "rule_exists", return_value=False),
             mock.patch.object(fault, "cmd",
                                side_effect=lambda *a, **k: events.append(("cmd", a))),
             mock.patch.object(fault, "add_owned_chain",
                                side_effect=lambda *a: events.append(("chain", a))),
+            mock.patch.object(fault, "firewall_report", return_value={
+                "icmp_drop_active": True, "icmp_drop_packets": 0,
+                "mss_active": False, "mss_packets": 0,
+            }),
         ):
             receipt = fault.arm_blackhole("safe-run01", guest_context())
 
@@ -108,6 +119,7 @@ class BlackholeLeaseContracts(unittest.TestCase):
             mock.patch.object(fault, "load_state", return_value=None),
             mock.patch.object(fault, "timer_active", side_effect=[False, False]),
             mock.patch.object(fault, "store_state"),
+            mock.patch.object(fault, "ensure_no_orphaned_lab_rules"),
             mock.patch.object(fault, "chain_exists", return_value=False),
             mock.patch.object(fault, "rule_exists", return_value=False),
             mock.patch.object(fault, "cmd",
