@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 import sys
 import tempfile
-import time
 import unittest
 from unittest.mock import patch
 
@@ -62,7 +61,7 @@ class WatchdogContracts(unittest.TestCase):
             if op == "arm":
                 return {
                     "status": "ARMED", "run_id": current_run, "mtu": 1200,
-                    "timer_active": True, "deadline_epoch": int(time.time()) + 90, "interface": "enp0s9",
+                    "timer_active": True, "deadline_epoch": 1090, "interface": "enp0s9",
                 }
             if op == "inspect":
                 return {
@@ -86,6 +85,7 @@ class WatchdogContracts(unittest.TestCase):
             patch.object(drill, "guest_call", side_effect=fake_guest),
             patch.object(drill, "router_call", side_effect=fake_router),
             patch.object(drill, "wait_for_watchdog", return_value=95.0),
+            patch.object(drill.time, "time", side_effect=[1000, 1000, 1000, 1095]),
         ):
             result = drill.drill(run_id, rollback_mode="watchdog")
 
