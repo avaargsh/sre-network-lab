@@ -12,7 +12,7 @@ import sys
 from http_vm import SHA256
 from lab_vm import require_independent_vms, require_http_proof
 from vm_mtu_drill import (
-    WATCHDOG_WAIT_SECONDS, require_armed, require_restored,
+    TTL, WATCHDOG_WAIT_SECONDS, require_armed, require_restored,
     require_watchdog_restored, UNVERIFIED,
 )
 
@@ -53,7 +53,7 @@ def verify(root: Path, expected_sha: str = SHA256):
     receipt = read("fault_inspect")
     if not isinstance(lease.get("deadline_epoch"), int):
         raise ValueError("watchdog deadline missing")
-    approximate_start = lease["deadline_epoch"] - 90
+    approximate_start = lease["deadline_epoch"] - TTL
     require_armed(lease, run_id, approximate_start)
     require_armed(receipt, run_id, approximate_start)
     if (lease.get("interface") != receipt.get("interface")
