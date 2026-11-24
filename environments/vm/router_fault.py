@@ -378,6 +378,7 @@ def arm(run_id, context):
     dev = choose_private_link(context)
     mtu = current_mtu(dev)
     require_arm_preconditions(mtu, load_state() is not None)
+    ensure_no_orphaned_lab_rules()
     if timer_active(run_id):
         raise ValueError("timer already active for run")
     timer_cmd, fault_cmd = build_arm_steps(run_id, dev, mtu)
@@ -392,6 +393,8 @@ def arm(run_id, context):
         cmd(*fault_cmd)
         if current_mtu(dev) != FAULT_MTU:
             raise RuntimeError("fault MTU readback failed")
+        if not timer_active(run_id):
+            raise RuntimeError("rollback timer not active after fault setup")
     except Exception:
         # If immediate recovery fails, the timer can still retry.
         restore(run_id, context)
@@ -438,6 +441,8 @@ def arm_blackhole(run_id, context):
         report = firewall_report(state, context)
         if not report["icmp_drop_active"]:
             raise RuntimeError("ICMP Fragmentation Needed drop rule did not verify")
+        if not timer_active(run_id):
+            raise RuntimeError("rollback timer not active after blackhole setup")
     except Exception:
         # Preserve the timer if immediate cleanup cannot be confirmed.
         restore(run_id, context)
@@ -490,6 +495,8 @@ def inspect(run_id, context):
         dev = choose_private_link(context)
         if current_mtu(dev) != ORIGINAL_MTU:
             raise ValueError("no owned lease for nonbaseline MTU")
+        if timer_active(run_id):
+            raise ValueError("orphaned rollback timer without an active lease")
         ensure_no_orphaned_lab_rules()
         specs = blackhole_rule_specs(run_id, context)
         clean = True
@@ -508,6 +515,10 @@ def inspect(run_id, context):
         raise ValueError("inspect attempted foreign lease")
     mtu = current_mtu(state["iface"])
     active = timer_active(run_id)
+    if mtu != FAULT_MTU:
+        raise ValueError("owned lease MTU does not match the active fault value")
+    if not active:
+        raise ValueError("rollback watchdog is not active for the owned lease")
     if state.get("mode") != "tcp-blackhole":
         return {"status": "ARMED", "run_id": run_id,
                 "interface": state["iface"], "mtu": mtu,
