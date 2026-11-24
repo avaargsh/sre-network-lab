@@ -78,7 +78,7 @@ class WatchdogContracts(unittest.TestCase):
             return {"ok": True, "status": 200, "digest": "a" * 64}
 
         with (
-            patch.object(drill, "ROOT", Path(temp)),
+            patch.object(drill, "ROOT", Path(temp.name)),
             patch.object(drill, "require_authorization"),
             patch.object(drill, "require_independent_vms"),
             patch.object(drill, "require_http_proof"),
@@ -90,7 +90,7 @@ class WatchdogContracts(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertEqual(router_calls, ["arm", "inspect"])
-        evidence = Path(temp) / "evidence" / run_id
+        evidence = Path(temp.name) / "evidence" / run_id
         status = json.loads((evidence / "status.json").read_text())
         watchdog = json.loads((evidence / "watchdog.json").read_text())
         rollback = json.loads((evidence / "rollback.json").read_text())
@@ -130,7 +130,7 @@ class WatchdogContracts(unittest.TestCase):
             return {"ok": True, "status": 200, "digest": "a" * 64}
 
         with (
-            patch.object(drill, "ROOT", Path(temp)),
+            patch.object(drill, "ROOT", Path(temp.name)),
             patch.object(drill, "require_authorization"),
             patch.object(drill, "require_independent_vms"),
             patch.object(drill, "require_http_proof"),
@@ -142,7 +142,7 @@ class WatchdogContracts(unittest.TestCase):
 
         self.assertEqual(result, 1)
         self.assertEqual(router_calls, ["arm", "inspect", "restore"])
-        evidence = Path(temp) / "evidence" / run_id
+        evidence = Path(temp.name) / "evidence" / run_id
         status = json.loads((evidence / "status.json").read_text())
         self.assertEqual(status["result"], "NOT_VERIFIED")
         self.assertEqual(status["watchdog"], "NOT_VERIFIED")
