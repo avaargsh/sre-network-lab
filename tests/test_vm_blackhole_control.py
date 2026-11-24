@@ -341,6 +341,7 @@ class LegacyArmSafetyContracts(unittest.TestCase):
             mock.patch.object(fault, "current_mtu", side_effect=(1500, 1200)),
             mock.patch.object(fault, "load_state", return_value=None),
             mock.patch.object(fault, "timer_active", side_effect=lambda _: next(timer_states)),
+            mock.patch.object(fault, "ensure_no_orphaned_lab_rules"),
             mock.patch.object(fault, "store_state"),
             mock.patch.object(fault, "cmd"),
             mock.patch.object(fault, "restore") as rollback,
