@@ -52,9 +52,9 @@ vagrant destroy -f
 - HTTP 不能只检查 TCP 能连接，还要检查 200、health 正文、64KiB POST 的 SHA256。
 - 控制器不支持任意 SSH Host/目标 IP/故障命令，本阶段不会修改运行中的 VM 或宿主机网络规则。
 
-## 下一阶段：三 VM 实际 MTU 故障（仍未实现）
+## 后续：真实三 VM 数据面验收（仍待执行）
 
-独立 VM Baseline 通过后再实现：Router 的指定实验网卡 MTU 限制、SSH 断连仍能执行的有时限自动回滚、src/router/dst 三点抓包、TCP/ICMP 业务矩阵、恢复后业务重验以及可信证据归档。
+Stage 2A 的 Router MTU 租约/恢复控制器、Stage 2B 的四接口抓包工具及 90 秒 watchdog 验证入口已经实现。剩余工作是在专用宿主机真实启动三台 VM，执行 Baseline、四点 PCAP、SSH 会话退出后的自动回滚和 HTTP 恢复验收；之后再实现真实 ICMP 黑洞与 TCP/MSS 业务矩阵。
 
 这些都需要在实际三 VM 中执行并验收，**不能用单机 Namespace 的绿色 CI 代替**，Issue #6 保持开放。
 
@@ -80,6 +80,11 @@ export RUN_ID="mtu-vm-$(date -u +%Y%m%d%H%M%S)"
 
 python3 environments/vm/vm_mtu_drill.py drill --run-id "$RUN_ID"
 python3 environments/vm/verify_vm_fault.py "evidence/$RUN_ID"
+
+# 单独实测 SSH 会话退出后的 90 秒自动回滚（等待约 95 秒）
+WATCHDOG_RUN_ID="mtu-watchdog-$(date -u +%Y%m%d%H%M%S)"
+python3 environments/vm/vm_mtu_drill.py drill --rollback-mode watchdog --run-id "$WATCHDOG_RUN_ID"
+python3 environments/vm/verify_vm_fault.py "evidence/$WATCHDOG_RUN_ID"
 ~~~
 
 Router 的 Vagrant Provision 会把本仓库中的 root helper 安装到 `/usr/local/libexec/sre-lab03d-router-fault.py`，自动回滚由该已安装的脚本执行，而不是依赖 SSH 会话。
