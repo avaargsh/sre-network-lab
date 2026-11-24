@@ -87,7 +87,7 @@ class BlackholeLeaseContracts(unittest.TestCase):
         with (
             mock.patch.object(fault, "current_mtu", side_effect=[1500, 1200]),
             mock.patch.object(fault, "load_state", return_value=None),
-            mock.patch.object(fault, "timer_active", side_effect=[False, True]),
+            mock.patch.object(fault, "timer_active", side_effect=[False, True, True]),
             mock.patch.object(fault, "store_state"),
             mock.patch.object(fault, "ensure_no_orphaned_lab_rules"),
             mock.patch.object(fault, "chain_exists", return_value=False),
@@ -218,6 +218,75 @@ class BlackholeLeaseContracts(unittest.TestCase):
         for op in ("shell", "iptables", "arm-blackhole;id"):
             with self.assertRaises(ValueError):
                 fault.remote_argv(op, "safe-run01")
+
+
+
+class WatchdogInspectionContracts(unittest.TestCase):
+    def test_inspect_refuses_blackhole_lease_when_watchdog_is_inactive(self):
+        state = active_state()
+        with (
+            mock.patch.object(fault, "load_state", return_value=state),
+            mock.patch.object(fault, "validate_state"),
+            mock.patch.object(fault, "current_mtu", return_value=1200),
+            mock.patch.object(fault, "timer_active", return_value=False),
+            mock.patch.object(fault, "firewall_report", return_value={
+                "icmp_drop_active": True, "icmp_drop_packets": 1,
+                "mss_active": False, "mss_packets": 0,
+            }),
+        ):
+            with self.assertRaises(ValueError):
+                fault.inspect("safe-run01", guest_context())
+
+    def test_inspect_refuses_blackhole_lease_when_router_mtu_is_not_fault_value(self):
+        state = active_state()
+        with (
+            mock.patch.object(fault, "load_state", return_value=state),
+            mock.patch.object(fault, "validate_state"),
+            mock.patch.object(fault, "current_mtu", return_value=1500),
+            mock.patch.object(fault, "timer_active", return_value=True),
+            mock.patch.object(fault, "firewall_report", return_value={
+                "icmp_drop_active": True, "icmp_drop_packets": 1,
+                "mss_active": False, "mss_packets": 0,
+            }),
+        ):
+            with self.assertRaises(ValueError):
+                fault.inspect("safe-run01", guest_context())
+
+    def test_inspect_refuses_orphaned_watchdog_without_owned_lease(self):
+        with (
+            mock.patch.object(fault, "load_state", return_value=None),
+            mock.patch.object(fault, "current_mtu", return_value=1500),
+            mock.patch.object(fault, "ensure_no_orphaned_lab_rules"),
+            mock.patch.object(fault, "chain_exists", return_value=False),
+            mock.patch.object(fault, "rule_exists", return_value=False),
+            mock.patch.object(fault, "timer_active", return_value=True),
+        ):
+            with self.assertRaises(ValueError):
+                fault.inspect("safe-run01", guest_context())
+
+
+class WatchdogArmFinalCheckContracts(unittest.TestCase):
+    def test_arm_blackhole_rechecks_watchdog_after_fault_setup(self):
+        timer_states = iter((False, True, False))
+        with (
+            mock.patch.object(fault, "current_mtu", side_effect=(1500, 1200)),
+            mock.patch.object(fault, "load_state", return_value=None),
+            mock.patch.object(fault, "timer_active", side_effect=lambda _: next(timer_states)),
+            mock.patch.object(fault, "store_state"),
+            mock.patch.object(fault, "ensure_no_orphaned_lab_rules"),
+            mock.patch.object(fault, "chain_exists", return_value=False),
+            mock.patch.object(fault, "rule_exists", return_value=False),
+            mock.patch.object(fault, "cmd"),
+            mock.patch.object(fault, "add_owned_chain"),
+            mock.patch.object(fault, "firewall_report", return_value={
+                "icmp_drop_active": True, "icmp_drop_packets": 1,
+                "mss_active": False, "mss_packets": 0,
+            }),
+            mock.patch.object(fault, "restore") as rollback,
+        ):
+            with self.assertRaises(RuntimeError):
+                fault.arm_blackhole("safe-run01", guest_context())
+        rollback.assert_called_once_with("safe-run01", guest_context())
 
 
 if __name__ == "__main__":
