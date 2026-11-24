@@ -90,7 +90,7 @@ Router 的 Vagrant Provision 会把本仓库中的 root helper 安装到 `/usr/l
 2. Router Helper 独立确认实验标记、两条私有接口、ip_forward、原始 MTU 必须为 1500，且无正在执行的租约。
 3. **先写 root-only 的运行租约、注册 90 秒 systemd transient timer 并确认其 ACTIVE，再修改 Router 私有接口 MTU 为 1200**；任一检查失败立即拒绝注入。
 4. MTU 改变后重验定时器和接口当前值，执行小 HTTP /health 与 64 KiB POST。此阶段**不丢弃 ICMP Fragmentation Needed**，不能要求大 HTTP 必然超时，更不能冒称已观察 TCP 黑洞。
-5. Host 无论成功或失败都尝试提前恢复 MTU 1500 并进行 HTTP 恢复验收。若 SSH 中断，预先注册的 systemd timer 应在租约期满时尝试恢复；若无法取得实际确认，结果仍为 NOT VERIFIED。
+5. 默认 `--rollback-mode manual` 会提前 SSH 恢复并验收 HTTP。新增 `--rollback-mode watchdog` 会在 arm 命令的 SSH 进程退出后，不再向 Router 发起 SSH 请求，等待完整 90 秒租约加 5 秒宽限，再重新连接执行只读 inspect；只有看到租约已消失、MTU=1500 且 timer inactive，才记为 watchdog PASS。若证据不满足，会尝试人工恢复作为安全兜底，但整个 watchdog 实验仍为 NOT_VERIFIED。
 
 系统只接受当前合法 Run ID 的操作。租约归属不符、timer 未活动、试图选择管理接口、恢复 MTU 未经读回确认，均不返回 PASS。
 
@@ -104,9 +104,9 @@ vagrant ssh router -c 'sudo -n systemctl list-timers --all --no-pager | grep sre
 vagrant ssh router -c "sudo -n python3 /usr/local/libexec/sre-lab03d-router-fault.py restore $RUN_ID"
 ~~~
 
-证据位于 `evidence/<RUN_ID>`：Router 租约、定时器回执、故障和恢复的 HTTP 结果、独立虚拟机拓扑与 SHA256SUMS。通过 `verify_vm_fault.py` 复验；此阶段 `pcap`、`blackhole`、`network` 三项仍强制标为 NOT_VERIFIED。
+证据位于 `evidence/<RUN_ID>`：Router 租约、故障窗口回执、`watchdog.json`（实际等待时间、过期后的 Router inspect）、故障和恢复的 HTTP 结果、独立虚拟机拓扑与 SHA256SUMS。通过 `verify_vm_fault.py` 复验。人工模式的 watchdog 维度保持 NOT_VERIFIED；watchdog 模式必须有至少 95 秒单调时钟等待、至少 90 秒记录窗口、`NO_ACTIVE_LEASE`、MTU=1500、timer inactive 及 systemd-watchdog 来源的恢复回执，缺一不可。此阶段 `pcap`、`blackhole`、`network` 三项仍强制标为 NOT_VERIFIED。
 
-**后续阶段**：在真 VM 上验收 90 秒 watchdog（含 SSH 中断）、三 VM 多点 PCAP、ICMP 丢失的真实黑洞及 TCP/MSS 恢复。没有这些独立证据，Issue #6 继续 OPEN。
+**Watchdog 验收入口已实现，真实 VM 实测仍待执行**：在专用三 VM 宿主机上先完成 Stage 1 Baseline，再运行下面的 watchdog 模式。GitHub-hosted CI 只覆盖控制流程和证据审计，不会启动 VirtualBox Guest。没有专用 Runner 的真实 Artifact，不能宣称 SSH 断连自动回滚已经实测。三 VM 多点 PCAP、ICMP 丢失的真实黑洞及 TCP/MSS 恢复仍待后续完成，Issue #6 继续 OPEN。
 
 
 ## Stage 2B：三独立 VM 四接口抓包基线（程序已实现，真实环境待验证）
