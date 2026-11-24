@@ -162,4 +162,4 @@ Host 控制器先验证三台 VM 的独立机器/启动身份、管理网卡隔�
 
 清理 Hook 无法覆盖宿主机突然断电或 Runner 被强杀的情况，此时需要人工核对 VirtualBox 资源。不要把共享生产宿主机注册为该 Runner；不要绕过身份检查或强制对已有 VM 运行实验。
 
-**真实执行状态**：截至该 PR，没有配置可执行的专用 VirtualBox Runner，GitHub-hosted CI 只覆盖代码和合成报文测试。因此真实三 VM 的身份/HTTP/四点 PCAP E2E 仍未验证。该手动工作流**不注入 MTU 或 ICMP 丢包**，也不能代表 PMTU 黑洞、MSS 缓解或 90 秒自动回滚已通过；Issue #6 保持开放。
+**真实执行状态**：截至该 PR，没有配置可执行的专用 VirtualBox Runner，GitHub-hosted CI 只覆盖代码和合成报文测试。因此真实三 VM 的身份/HTTP/四点 PCAP E2E 仍未验证。工作流默认只执行 Baseline/PCAP；只有另行填写第二确认 `I_CONFIRM_ROUTER_MTU_WATCHDOG` 才会执行 90 秒 watchdog 故障实验。它不注入 ICMP 丢包，也不代表 PMTU 黑洞或 MSS 缓解已通过；没有真实 Runner Artifact 前，不得宣称 VM watchdog 实测通过。Issue #6 保持开放。
