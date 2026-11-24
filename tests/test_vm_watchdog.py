@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -61,7 +62,7 @@ class WatchdogContracts(unittest.TestCase):
             if op == "arm":
                 return {
                     "status": "ARMED", "run_id": current_run, "mtu": 1200,
-                    "timer_active": True, "deadline_epoch": 1090, "interface": "enp0s9",
+                    "timer_active": True, "deadline_epoch": int(time.time()) + 90, "interface": "enp0s9",
                 }
             if op == "inspect":
                 return {
