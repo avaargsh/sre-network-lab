@@ -168,3 +168,36 @@ Host 控制器先验证三台 VM 的独立机器/启动身份、管理网卡隔�
 清理 Hook 无法覆盖宿主机突然断电或 Runner 被强杀的情况，此时需要人工核对 VirtualBox 资源。不要把共享生产宿主机注册为该 Runner；不要绕过身份检查或强制对已有 VM 运行实验。
 
 **真实执行状态**：截至该 PR，没有配置可执行的专用 VirtualBox Runner，GitHub-hosted CI 只覆盖代码和合成报文测试。因此真实三 VM 的身份/HTTP/四点 PCAP E2E 仍未验证。工作流默认只执行 Baseline/PCAP；只有另行填写第二确认 `I_CONFIRM_ROUTER_MTU_WATCHDOG` 才会执行 90 秒 watchdog 故障实验。它不注入 ICMP 丢包，也不代表 PMTU 黑洞或 MSS 缓解已通过；没有真实 Runner Artifact 前，不得宣称 VM watchdog 实测通过。Issue #6 保持开放。
+
+
+## Stage 2D — Router VM TCP PMTU blackhole control primitives (implemented; live E2E NOT VERIFIED)
+
+The Router guest now has fixed-scope control operations for the next TCP PMTU experiment:
+
+- **arm-blackhole**: pre-register a 90-second systemd rollback timer, install a run-scoped OUTPUT rule dropping only ICMP Fragmentation Needed toward 10.209.10.2 on the private left NIC, then lower only the Router right data NIC MTU from 1500 to 1200.
+- **mitigate**: while the same lease and watchdog are active, install run-scoped bidirectional TCP SYN MSS clamping to 1160 for only 10.209.10.2 ↔ 10.209.20.2 across the two private interfaces.
+- **inspect**: read back the lease, timer, firewall rule presence and packet counters.
+- **restore**: set the Router data NIC MTU back to 1500, remove only the current run's owner-marked firewall chains, and stop its timer. The same restore path is used by the systemd watchdog.
+
+The Router provisioning now installs iptables. Rule chains are unique per validated RUN_ID; cleanup refuses to delete chains without the exact ownership marker or when unexpected rules remain. A new run is refused if stale LAB-03D-owned chains/comments are detected.
+
+### Manual helper smoke procedure (dedicated isolated VirtualBox lab only)
+
+This exercises the Router control primitive, not the complete network acceptance. First provision and start the three VMs using the Stage 1 instructions. Then:
+
+~~~bash
+cd environments/vm
+vagrant provision router
+RUN_ID="pmtu-vm-$(date -u +%Y%m%d%H%M%S)"
+
+vagrant ssh router -c "sudo -n env SRE_LAB_VM_FAULT_ACK=1 SRE_LAB_VM_SCOPE=sre-lab03d-vbox-intnet python3 /usr/local/libexec/sre-lab03d-router-fault.py arm-blackhole $RUN_ID"
+vagrant ssh router -c "sudo -n python3 /usr/local/libexec/sre-lab03d-router-fault.py inspect $RUN_ID"
+vagrant ssh router -c "sudo -n python3 /usr/local/libexec/sre-lab03d-router-fault.py mitigate $RUN_ID"
+vagrant ssh router -c "sudo -n python3 /usr/local/libexec/sre-lab03d-router-fault.py inspect $RUN_ID"
+vagrant ssh router -c "sudo -n python3 /usr/local/libexec/sre-lab03d-router-fault.py restore $RUN_ID"
+vagrant ssh router -c "sudo -n python3 /usr/local/libexec/sre-lab03d-router-fault.py inspect $RUN_ID"
+~~~
+
+Do not run this on a shared or production Router. If the lease expires, the systemd timer attempts restoration without depending on the host SSH session. Verify MTU and firewall cleanup before another experiment.
+
+**Evidence boundary:** this stage adds and unit-tests the Router-side controls only. It does not yet orchestrate baseline → blackhole → MSS mitigation → recovery, collect phase-specific four-point PCAPs, independently audit TCP retransmissions/MSS on the wire, or test the 90-second watchdog after a deliberately disconnected SSH client. There is no real three-VM E2E Artifact yet. All those outcomes remain NOT_VERIFIED; Issue #6 must remain OPEN.
