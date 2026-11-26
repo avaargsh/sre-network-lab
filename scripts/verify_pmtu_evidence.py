@@ -30,13 +30,20 @@ def verify_hashes(folder: Path) -> int:
     return len(expected)
 
 
+def read_object(path: Path) -> dict:
+    value = json.loads(path.read_text())
+    if not isinstance(value, dict):
+        raise ValueError(f"{path}: expected a JSON object")
+    return value
+
+
 def verify(root: Path) -> dict:
     if not root.is_dir() or root.is_symlink():
         raise ValueError("evidence root missing or a symlink")
-    result = json.loads((root / "result.json").read_text())
+    result = read_object(root / "result.json")
     if result.get("result") != "PASS" or result.get("namespaces_remaining") != []:
         raise ValueError(f"lab not cleanly recovered: {result}")
-    env = json.loads((root / "environment.json").read_text())
+    env = read_object(root / "environment.json")
     if not env.get("scope", "").startswith("one isolated VM/runner"):
         raise ValueError("unexpected lab scope")
     hashes = verify_hashes(root)
@@ -45,7 +52,7 @@ def verify(root: Path) -> dict:
         folder = root / phase
         if not folder.is_dir():
             raise ValueError(f"missing phase {phase}")
-        status = json.loads((folder / "status.json").read_text())
+        status = read_object(folder / "status.json")
         if status.get("phase") != phase or status.get("status") != "PASS":
             raise ValueError(f"{phase}: missing PASS evidence")
         pings = {}

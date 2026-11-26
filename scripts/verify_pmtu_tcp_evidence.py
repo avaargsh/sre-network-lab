@@ -7,16 +7,16 @@ from pathlib import Path
 import sys
 
 from lab_pmtu_tcp import PHASES, assert_phase, parse_tcpdump
-from verify_pmtu_evidence import verify_hashes
+from verify_pmtu_evidence import read_object, verify_hashes
 
 
 def verify(root: Path) -> dict:
     if not root.is_dir() or root.is_symlink():
         raise ValueError("missing or unsafe evidence directory")
-    result = json.loads((root / "result.json").read_text())
+    result = read_object(root / "result.json")
     if result != {"result": "PASS", "namespaces_remaining": []}:
         raise ValueError("experiment did not finish with clean namespace teardown")
-    environment = json.loads((root / "environment.json").read_text())
+    environment = read_object(root / "environment.json")
     if environment.get("scope") != "one isolated runner with three Linux namespaces, NOT separate VMs":
         raise ValueError("cannot attribute this evidence to the expected isolated lab")
     total = verify_hashes(root)
@@ -24,7 +24,7 @@ def verify(root: Path) -> dict:
         directory = root / phase
         if not directory.is_dir() or directory.is_symlink():
             raise ValueError(f"missing/unsafe phase directory: {phase}")
-        status = json.loads((directory / "status.json").read_text())
+        status = read_object(directory / "status.json")
         if status.get("phase") != phase or status.get("status") != "PASS":
             raise ValueError(f"no phase PASS evidence for {phase}")
         for side in ("ingress", "egress"):
